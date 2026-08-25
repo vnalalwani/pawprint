@@ -1,0 +1,30 @@
+name: pawprint
+description: Field registry for community dogs — name, breed, ID, health, photo, and location.
+publish_to: "none"
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.13.1
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.8
+  flutter_map: ^8.2.2
+  geolocator: ^14.0.2
+  image_picker: ^1.2.0
+  intl: ^0.20.2
+  latlong2: ^0.9.1
+  path: ^1.9.1
+  path_provider: ^2.1.5
+  sembast: ^3.8.5+1
+  sembast_web: ^2.4.1
+  uuid: ^4.5.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
