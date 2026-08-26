@@ -33,6 +33,11 @@ migrate_working_dir/
 /build/
 /coverage/
 
+# Node and local database credentials
+node_modules/
+.env
+.env.local
+
 # Symbolication related
 app.*.symbols
 

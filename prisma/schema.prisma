@@ -1,0 +1,35 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+  schemas   = ["treatfeedtails"]
+}
+
+model PrimaryDogDetails {
+  id               String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tagId            String   @unique(map: "primary_dog_details_tag_id_key") @map("tag_id")
+  animalCategory   String   @map("animal_category")
+  photoPath        String?  @map("photo_path")
+  name             String?
+  gender           String?
+  age              Int?
+  color            String?
+  breed            String?
+  identifyingMarks String?  @map("identifying_marks")
+  notes            String?
+  address          String?
+  area             String?
+  createdDate      DateTime @default(now()) @map("created_date")
+  addedBy          String?  @map("added_by")
+  updatedDate      DateTime @default(now()) @map("updated_date")
+  updatedBy        String?  @map("updated_by")
+
+  @@index([area], map: "primary_dog_details_area_idx")
+  @@index([updatedDate(sort: Desc)], map: "primary_dog_details_updated_date_idx")
+  @@map("primary_dog_details")
+  @@schema("treatfeedtails")
+}

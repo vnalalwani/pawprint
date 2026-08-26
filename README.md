@@ -14,6 +14,21 @@ flutter run --dart-define=SUPABASE_PUBLISHABLE_KEY=your-publishable-key
 
 Never use a service-role key in the Flutter app.
 
+## Prisma database connection
+
+Prisma is configured for the Supabase PostgreSQL database at
+`db.mtyouhpigpohzjifhdxz.supabase.co:5432`, database `postgres`, user
+`postgres`, and schema `treatfeedtails`. Copy `.env.example` to `.env`, replace
+`[YOUR-PASSWORD]`, then run:
+
+```text
+npm install
+npx prisma generate
+npx prisma validate
+```
+
+Do not commit `.env` or use the database password in Flutter or browser code.
+
 The dog record table is defined in
 `supabase/migrations/001_primary_dog_details.sql`. Apply it with the Supabase
 CLI or run it in the Supabase SQL Editor.
