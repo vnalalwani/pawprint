@@ -4,8 +4,10 @@ import 'package:path_provider/path_provider.dart';
 import 'package:sembast/sembast_io.dart';
 import 'package:sembast/sembast_memory.dart';
 import 'package:sembast_web/sembast_web.dart';
+import 'package:supabase_flutter/supabase_flutter.dart' show Supabase;
 import 'package:uuid/uuid.dart';
 
+import '../config/supabase_config.dart';
 import '../models/dog.dart';
 import '../models/vaccination.dart';
 
@@ -51,6 +53,35 @@ class DogRepository {
 
   Future<Dog> saveDog(Dog dog) async {
     await _dogs.record(dog.id).put(_db, dog.toMap());
+
+    if (SupabaseConfig.isInitialized) {
+      final record = <String, Object?>{
+        'id': dog.id,
+        'animal_category': dog.animalCategory,
+        'photo_path': dog.photoPath ?? dog.photoKey,
+        'name': dog.name,
+        'gender': dog.gender,
+        'age': int.tryParse(dog.age),
+        'color': dog.color,
+        'breed': dog.breed,
+        'identifying_marks': dog.identifyingMarks.isEmpty
+            ? dog.medicalIssues
+            : dog.identifyingMarks,
+        'notes': dog.notes,
+        'address': dog.address.isEmpty ? dog.locationNote : dog.address,
+        'area': dog.area,
+        'created_date': dog.createdAt.toIso8601String(),
+        'updated_date': dog.updatedAt.toIso8601String(),
+      };
+      if (dog.identification.isNotEmpty) {
+        record['tag_id'] = dog.identification;
+      }
+
+      await Supabase.instance.client
+          .from('primary_dog_details')
+          .upsert(record, onConflict: 'id');
+    }
+
     return dog;
   }
 

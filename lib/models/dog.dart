@@ -6,7 +6,12 @@ class Dog {
     required this.name,
     required this.breed,
     required this.identification,
+    this.animalCategory = 'dog',
+    this.photoPath,
+    this.gender = '',
     this.age = '',
+    this.color = '',
+    this.identifyingMarks = '',
     this.sterilization = SterilizationStatus.unknown,
     this.sterilizedOn,
     this.medicalIssues = '',
@@ -14,6 +19,8 @@ class Dog {
     this.latitude,
     this.longitude,
     this.locationNote = '',
+    this.address = '',
+    this.area = '',
     this.notes = '',
     required this.createdAt,
     required this.updatedAt,
@@ -23,7 +30,12 @@ class Dog {
   final String name;
   final String breed;
   final String identification;
+  final String animalCategory;
+  final String? photoPath;
+  final String gender;
   final String age;
+  final String color;
+  final String identifyingMarks;
   final SterilizationStatus sterilization;
   final DateTime? sterilizedOn;
   final String medicalIssues;
@@ -31,6 +43,8 @@ class Dog {
   final double? latitude;
   final double? longitude;
   final String locationNote;
+  final String address;
+  final String area;
   final String notes;
   final DateTime createdAt;
   final DateTime updatedAt;
@@ -54,6 +68,13 @@ class Dog {
     String? locationNote,
     String? notes,
     DateTime? updatedAt,
+    String? animalCategory,
+    String? photoPath,
+    String? gender,
+    String? color,
+    String? identifyingMarks,
+    String? address,
+    String? area,
   }) {
     return Dog(
       id: id,
@@ -71,6 +92,13 @@ class Dog {
       longitude: clearLocation ? null : (longitude ?? this.longitude),
       locationNote: locationNote ?? this.locationNote,
       notes: notes ?? this.notes,
+      animalCategory: animalCategory ?? this.animalCategory,
+      photoPath: photoPath ?? this.photoPath,
+      gender: gender ?? this.gender,
+      color: color ?? this.color,
+      identifyingMarks: identifyingMarks ?? this.identifyingMarks,
+      address: address ?? this.address,
+      area: area ?? this.area,
       createdAt: createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
     );
@@ -92,6 +120,13 @@ class Dog {
     'notes': notes,
     'createdAt': createdAt.toIso8601String(),
     'updatedAt': updatedAt.toIso8601String(),
+    'animalCategory': animalCategory,
+    'photoPath': photoPath,
+    'gender': gender,
+    'color': color,
+    'identifyingMarks': identifyingMarks,
+    'address': address,
+    'area': area,
   };
 
   factory Dog.fromMap(Map<String, Object?> map) {
@@ -116,6 +151,13 @@ class Dog {
       notes: (map['notes'] as String?) ?? '',
       createdAt: DateTime.parse(map['createdAt']! as String),
       updatedAt: DateTime.parse(map['updatedAt']! as String),
+      animalCategory: (map['animalCategory'] as String?) ?? 'dog',
+      photoPath: map['photoPath'] as String?,
+      gender: (map['gender'] as String?) ?? '',
+      color: (map['color'] as String?) ?? '',
+      identifyingMarks: (map['identifyingMarks'] as String?) ?? '',
+      address: (map['address'] as String?) ?? '',
+      area: (map['area'] as String?) ?? '',
     );
   }
 }

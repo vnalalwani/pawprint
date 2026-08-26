@@ -1,9 +1,15 @@
 import 'package:flutter/material.dart';
 
+import 'config/supabase_config.dart';
+
 import 'data/dog_repository.dart';
 import 'models/dog.dart';
 
-void main() => runApp(const MyApp());
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await SupabaseConfig.initialize();
+  runApp(const MyApp());
+}
 
 class MyApp extends StatelessWidget {
   const MyApp({super.key, this.repository});
@@ -365,17 +371,33 @@ class _AddDogDialog extends StatefulWidget {
 
 class _AddDogDialogState extends State<_AddDogDialog> {
   final _formKey = GlobalKey<FormState>();
+  final _animalCategory = TextEditingController(text: 'dog');
   final _name = TextEditingController();
   final _breed = TextEditingController();
   final _id = TextEditingController();
-  final _location = TextEditingController();
+  final _photo = TextEditingController();
+  final _gender = TextEditingController();
+  final _age = TextEditingController();
+  final _color = TextEditingController();
+  final _identifyingMarks = TextEditingController();
+  final _notes = TextEditingController();
+  final _address = TextEditingController();
+  final _area = TextEditingController();
 
   @override
   void dispose() {
+    _animalCategory.dispose();
     _name.dispose();
     _breed.dispose();
     _id.dispose();
-    _location.dispose();
+    _photo.dispose();
+    _gender.dispose();
+    _age.dispose();
+    _color.dispose();
+    _identifyingMarks.dispose();
+    _notes.dispose();
+    _address.dispose();
+    _area.dispose();
     super.dispose();
   }
 
@@ -386,10 +408,20 @@ class _AddDogDialogState extends State<_AddDogDialog> {
       context,
       Dog(
         id: DogRepository.newId(),
+        animalCategory: _animalCategory.text.trim(),
         name: _name.text.trim(),
         breed: _breed.text.trim(),
         identification: _id.text.trim(),
-        locationNote: _location.text.trim(),
+        photoPath: _photo.text.trim().isEmpty ? null : _photo.text.trim(),
+        gender: _gender.text.trim(),
+        age: _age.text.trim(),
+        color: _color.text.trim(),
+        identifyingMarks: _identifyingMarks.text.trim(),
+        medicalIssues: _identifyingMarks.text.trim(),
+        notes: _notes.text.trim(),
+        address: _address.text.trim(),
+        locationNote: _address.text.trim(),
+        area: _area.text.trim(),
         createdAt: now,
         updatedAt: now,
       ),
@@ -406,23 +438,25 @@ class _AddDogDialogState extends State<_AddDogDialog> {
           mainAxisSize: MainAxisSize.min,
           children: [
             TextFormField(
+              controller: _animalCategory,
+              decoration: const InputDecoration(labelText: 'Animal category'),
+              validator: (value) => value == null || value.trim().isEmpty
+                  ? 'Add an animal category'
+                  : null,
+            ),
+            TextFormField(
               controller: _name,
               autofocus: true,
               decoration: const InputDecoration(
                 labelText: 'Name',
                 hintText: 'A friendly name',
               ),
-              validator: (value) =>
-                  value == null || value.trim().isEmpty ? 'Add a name' : null,
             ),
             TextFormField(
               controller: _breed,
               decoration: const InputDecoration(
                 labelText: 'Breed / description',
               ),
-              validator: (value) => value == null || value.trim().isEmpty
-                  ? 'Add a description'
-                  : null,
             ),
             TextFormField(
               controller: _id,
@@ -431,10 +465,51 @@ class _AddDogDialogState extends State<_AddDogDialog> {
               ),
             ),
             TextFormField(
-              controller: _location,
+              controller: _photo,
               decoration: const InputDecoration(
-                labelText: 'Where found (optional',
+                labelText: 'Photo path (optional)',
               ),
+            ),
+            TextFormField(
+              controller: _gender,
+              decoration: const InputDecoration(labelText: 'Gender (optional)'),
+            ),
+            TextFormField(
+              controller: _age,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(labelText: 'Age (optional)'),
+              validator: (value) =>
+                  value != null &&
+                      value.trim().isNotEmpty &&
+                      int.tryParse(value.trim()) == null
+                  ? 'Age must be a whole number'
+                  : null,
+            ),
+            TextFormField(
+              controller: _color,
+              decoration: const InputDecoration(labelText: 'Color (optional)'),
+            ),
+            TextFormField(
+              controller: _identifyingMarks,
+              maxLines: 2,
+              decoration: const InputDecoration(
+                labelText: 'Identifying marks (optional)',
+              ),
+            ),
+            TextFormField(
+              controller: _notes,
+              maxLines: 2,
+              decoration: const InputDecoration(labelText: 'Notes (optional)'),
+            ),
+            TextFormField(
+              controller: _address,
+              decoration: const InputDecoration(
+                labelText: 'Address (optional)',
+              ),
+            ),
+            TextFormField(
+              controller: _area,
+              decoration: const InputDecoration(labelText: 'Area (optional)'),
             ),
           ],
         ),

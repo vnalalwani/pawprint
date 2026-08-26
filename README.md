@@ -2,6 +2,25 @@
 
 A new Flutter project.
 
+## Supabase
+
+Supabase is configured for project `mtyouhpigpohzjifhdxz` and schema
+`treatfeedtails`. The public publishable key is configured by default, or can
+be overridden at build or run time:
+
+```text
+flutter run --dart-define=SUPABASE_PUBLISHABLE_KEY=your-publishable-key
+```
+
+Never use a service-role key in the Flutter app.
+
+The dog record table is defined in
+`supabase/migrations/001_primary_dog_details.sql`. Apply it with the Supabase
+CLI or run it in the Supabase SQL Editor.
+
+In the Supabase dashboard, add `treatfeedtails` under **Settings -> API ->
+Exposed schemas** so the Flutter client can reach the table.
+
 ## Getting Started
 
 This project is a starting point for a Flutter application.
