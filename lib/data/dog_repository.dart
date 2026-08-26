@@ -1,9 +1,6 @@
-import 'dart:typed_data';
-
 import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
-import 'package:sembast/sembast.dart';
 import 'package:sembast/sembast_io.dart';
 import 'package:sembast/sembast_memory.dart';
 import 'package:sembast_web/sembast_web.dart';
@@ -27,7 +24,9 @@ class DogRepository {
       db = await databaseFactoryWeb.openDatabase('pawprint.db');
     } else {
       final dir = await getApplicationDocumentsDirectory();
-      db = await databaseFactoryIo.openDatabase(p.join(dir.path, 'pawprint.db'));
+      db = await databaseFactoryIo.openDatabase(
+        p.join(dir.path, 'pawprint.db'),
+      );
     }
     return DogRepository._(db);
   }
