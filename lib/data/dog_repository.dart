@@ -52,29 +52,36 @@ class DogRepository {
   }
 
   Future<Dog> saveDog(Dog dog) async {
-    await _dogs.record(dog.id).put(_db, dog.toMap());
+    var persistedDog = dog;
+    if (dog.photoBytes != null && dog.photoKey == null) {
+      final photoKey = await savePhotoBytes(dog.photoBytes!);
+      persistedDog = dog.copyWith(photoKey: photoKey);
+    }
+    await _dogs.record(persistedDog.id).put(_db, persistedDog.toMap());
 
     if (SupabaseConfig.isInitialized) {
       final record = <String, Object?>{
-        'id': dog.id,
-        'animal_category': dog.animalCategory,
-        'photo_path': dog.photoPath ?? dog.photoKey,
-        'name': dog.name,
-        'gender': dog.gender,
-        'age': int.tryParse(dog.age),
-        'color': dog.color,
-        'breed': dog.breed,
-        'identifying_marks': dog.identifyingMarks.isEmpty
-            ? dog.medicalIssues
-            : dog.identifyingMarks,
-        'notes': dog.notes,
-        'address': dog.address.isEmpty ? dog.locationNote : dog.address,
-        'area': dog.area,
-        'created_date': dog.createdAt.toIso8601String(),
-        'updated_date': dog.updatedAt.toIso8601String(),
+        'id': persistedDog.id,
+        'animal_category': persistedDog.animalCategory,
+        'photo_path': persistedDog.photoPath ?? persistedDog.photoKey,
+        'name': persistedDog.name,
+        'gender': persistedDog.gender,
+        'age': int.tryParse(persistedDog.age),
+        'color': persistedDog.color,
+        'breed': persistedDog.breed,
+        'identifying_marks': persistedDog.identifyingMarks.isEmpty
+            ? persistedDog.medicalIssues
+            : persistedDog.identifyingMarks,
+        'notes': persistedDog.notes,
+        'address': persistedDog.address.isEmpty
+            ? persistedDog.locationNote
+            : persistedDog.address,
+        'area': persistedDog.area,
+        'created_date': persistedDog.createdAt.toIso8601String(),
+        'updated_date': persistedDog.updatedAt.toIso8601String(),
       };
-      if (dog.identification.isNotEmpty) {
-        record['tag_id'] = dog.identification;
+      if (persistedDog.identification.isNotEmpty) {
+        record['tag_id'] = persistedDog.identification;
       }
 
       await Supabase.instance.client
@@ -82,7 +89,7 @@ class DogRepository {
           .upsert(record, onConflict: 'id');
     }
 
-    return dog;
+    return persistedDog;
   }
 
   Future<void> deleteDog(String id) async {

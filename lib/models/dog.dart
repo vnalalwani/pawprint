@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 enum SterilizationStatus { unknown, yes, no }
 
 class Dog {
@@ -8,6 +10,7 @@ class Dog {
     required this.identification,
     this.animalCategory = 'dog',
     this.photoPath,
+    this.photoBytes,
     this.gender = '',
     this.age = '',
     this.color = '',
@@ -32,6 +35,7 @@ class Dog {
   final String identification;
   final String animalCategory;
   final String? photoPath;
+  final Uint8List? photoBytes;
   final String gender;
   final String age;
   final String color;
@@ -70,6 +74,7 @@ class Dog {
     DateTime? updatedAt,
     String? animalCategory,
     String? photoPath,
+    Uint8List? photoBytes,
     String? gender,
     String? color,
     String? identifyingMarks,
@@ -94,6 +99,7 @@ class Dog {
       notes: notes ?? this.notes,
       animalCategory: animalCategory ?? this.animalCategory,
       photoPath: photoPath ?? this.photoPath,
+      photoBytes: photoBytes ?? this.photoBytes,
       gender: gender ?? this.gender,
       color: color ?? this.color,
       identifyingMarks: identifyingMarks ?? this.identifyingMarks,

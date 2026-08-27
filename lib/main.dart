@@ -1,4 +1,8 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
+import 'package:geolocator/geolocator.dart';
+import 'package:image_picker/image_picker.dart';
 
 import 'config/supabase_config.dart';
 
@@ -19,7 +23,7 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Pawprint',
+      title: 'pawhere',
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xff1c6b5a)),
         scaffoldBackgroundColor: const Color(0xfff5f3ee),
@@ -100,9 +104,11 @@ class _HomePageState extends State<HomePage> {
     return Scaffold(
       appBar: AppBar(
         backgroundColor: Colors.transparent,
-        title: const Text(
-          'Pawprint',
-          style: TextStyle(fontWeight: FontWeight.w800),
+        title: Image.asset(
+          'logo.png',
+          width: 132,
+          height: 48,
+          fit: BoxFit.contain,
         ),
         actions: [
           IconButton(
@@ -378,11 +384,10 @@ class _AddDogDialog extends StatefulWidget {
 
 class _AddDogDialogState extends State<_AddDogDialog> {
   final _formKey = GlobalKey<FormState>();
-  final _animalCategory = TextEditingController(text: 'dog');
+  String _animalCategory = 'dog';
   final _name = TextEditingController();
   final _breed = TextEditingController();
   final _id = TextEditingController();
-  final _photo = TextEditingController();
   final _gender = TextEditingController();
   final _age = TextEditingController();
   final _color = TextEditingController();
@@ -390,14 +395,17 @@ class _AddDogDialogState extends State<_AddDogDialog> {
   final _notes = TextEditingController();
   final _address = TextEditingController();
   final _area = TextEditingController();
+  Uint8List? _photoBytes;
+  String? _photoName;
+  bool _gettingLocation = false;
+  double? _latitude;
+  double? _longitude;
 
   @override
   void dispose() {
-    _animalCategory.dispose();
     _name.dispose();
     _breed.dispose();
     _id.dispose();
-    _photo.dispose();
     _gender.dispose();
     _age.dispose();
     _color.dispose();
@@ -408,6 +416,51 @@ class _AddDogDialogState extends State<_AddDogDialog> {
     super.dispose();
   }
 
+  Future<void> _pickPhoto(ImageSource source) async {
+    final file = await ImagePicker().pickImage(source: source);
+    if (file == null) return;
+    final bytes = await file.readAsBytes();
+    if (!mounted) return;
+    setState(() {
+      _photoBytes = bytes;
+      _photoName = file.name;
+    });
+  }
+
+  Future<void> _useCurrentLocation() async {
+    setState(() => _gettingLocation = true);
+    try {
+      if (!await Geolocator.isLocationServiceEnabled()) {
+        throw Exception('Location services are disabled on this device.');
+      }
+
+      var permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+      if (permission == LocationPermission.denied ||
+          permission == LocationPermission.deniedForever) {
+        throw Exception('Location permission was not granted.');
+      }
+
+      final position = await Geolocator.getCurrentPosition();
+      if (!mounted) return;
+      _address.text =
+          'Current location: ${position.latitude.toStringAsFixed(6)}, '
+          '${position.longitude.toStringAsFixed(6)}';
+      _latitude = position.latitude;
+      _longitude = position.longitude;
+      setState(() {});
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not get current location: $error')),
+      );
+    } finally {
+      if (mounted) setState(() => _gettingLocation = false);
+    }
+  }
+
   void _save() {
     if (!_formKey.currentState!.validate()) return;
     final now = DateTime.now();
@@ -415,11 +468,11 @@ class _AddDogDialogState extends State<_AddDogDialog> {
       context,
       Dog(
         id: DogRepository.newId(),
-        animalCategory: _animalCategory.text.trim(),
+        animalCategory: _animalCategory,
         name: _name.text.trim(),
         breed: _breed.text.trim(),
         identification: _id.text.trim(),
-        photoPath: _photo.text.trim().isEmpty ? null : _photo.text.trim(),
+        photoBytes: _photoBytes,
         gender: _gender.text.trim(),
         age: _age.text.trim(),
         color: _color.text.trim(),
@@ -429,6 +482,8 @@ class _AddDogDialogState extends State<_AddDogDialog> {
         address: _address.text.trim(),
         locationNote: _address.text.trim(),
         area: _area.text.trim(),
+        latitude: _latitude,
+        longitude: _longitude,
         createdAt: now,
         updatedAt: now,
       ),
@@ -444,12 +499,16 @@ class _AddDogDialogState extends State<_AddDogDialog> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            TextFormField(
-              controller: _animalCategory,
+            DropdownButtonFormField<String>(
+              initialValue: _animalCategory,
               decoration: const InputDecoration(labelText: 'Animal category'),
-              validator: (value) => value == null || value.trim().isEmpty
-                  ? 'Add an animal category'
-                  : null,
+              items: const [
+                DropdownMenuItem(value: 'dog', child: Text('Dog')),
+                DropdownMenuItem(value: 'cat', child: Text('Cat')),
+              ],
+              onChanged: (value) {
+                if (value != null) setState(() => _animalCategory = value);
+              },
             ),
             TextFormField(
               controller: _name,
@@ -471,12 +530,49 @@ class _AddDogDialogState extends State<_AddDogDialog> {
                 labelText: 'Tag or ID (optional)',
               ),
             ),
-            TextFormField(
-              controller: _photo,
-              decoration: const InputDecoration(
-                labelText: 'Photo path (optional)',
+            if (_photoBytes != null)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 10),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: Image.memory(
+                    _photoBytes!,
+                    height: 140,
+                    width: double.infinity,
+                    fit: BoxFit.cover,
+                  ),
+                ),
               ),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () => _pickPhoto(ImageSource.camera),
+                    icon: const Icon(Icons.camera_alt_outlined),
+                    label: const Text('Take photo'),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () => _pickPhoto(ImageSource.gallery),
+                    icon: const Icon(Icons.photo_library_outlined),
+                    label: const Text('Browse photos'),
+                  ),
+                ),
+              ],
             ),
+            if (_photoName != null)
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Text(
+                    _photoName!,
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                ),
+              ),
             TextFormField(
               controller: _gender,
               decoration: const InputDecoration(labelText: 'Gender (optional)'),
@@ -512,6 +608,21 @@ class _AddDogDialogState extends State<_AddDogDialog> {
               controller: _address,
               decoration: const InputDecoration(
                 labelText: 'Address (optional)',
+                suffixIcon: Icon(Icons.location_on_outlined),
+              ),
+            ),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
+                onPressed: _gettingLocation ? null : _useCurrentLocation,
+                icon: _gettingLocation
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.my_location),
+                label: const Text('Use current location'),
               ),
             ),
             TextFormField(
