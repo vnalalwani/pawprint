@@ -29,11 +29,12 @@ class DogRepository {
         .from('primary_dog_details')
         .select()
         .order('updated_date', ascending: false);
-    return rows.map(_dogFromSupabase).toList();
+    return Future.wait(rows.map(_dogFromSupabase));
   }
 
-  Dog _dogFromSupabase(Map<String, dynamic> row) {
-    final photoPath = row['photo_path'] as String?;
+  Future<Dog> _dogFromSupabase(Map<String, dynamic> row) async {
+    final storedPhotoPath = row['photo_path'] as String?;
+    final photoPath = await _photoUrl(storedPhotoPath);
     final createdDate = DateTime.parse(row['created_date'] as String);
     final updatedDate = DateTime.parse(row['updated_date'] as String);
     return Dog(
@@ -60,6 +61,18 @@ class DogRepository {
     );
   }
 
+  Future<String?> _photoUrl(String? storedPath) async {
+    if (storedPath == null || storedPath.isEmpty) return null;
+    var path = storedPath;
+    final marker = '/object/public/$_photoBucket/';
+    if (path.startsWith('http') && path.contains(marker)) {
+      path = path.substring(path.indexOf(marker) + marker.length);
+    } else if (path.startsWith('http')) {
+      return path;
+    }
+    return _client.storage.from(_photoBucket).createSignedUrl(path, 3600);
+  }
+
   Future<Dog?> dogById(String id) async {
     _requireConnection();
     final row = await _client
@@ -67,7 +80,7 @@ class DogRepository {
         .select()
         .eq('id', id)
         .maybeSingle();
-    return row == null ? null : _dogFromSupabase(row);
+    return row == null ? null : await _dogFromSupabase(row);
   }
 
   Future<Dog> saveDog(Dog dog) async {
@@ -103,11 +116,12 @@ class DogRepository {
         // The upload below can still succeed when there is no old file.
       }
       await storage.uploadBinary(storagePath, dog.photoBytes!);
-      photoPath = storage.getPublicUrl(storagePath);
+      photoPath = storagePath;
       await _client
           .from('primary_dog_details')
           .update({'photo_path': photoPath})
           .eq('id', dog.id);
+      photoPath = await _photoUrl(photoPath);
     }
 
     return dog.copyWith(photoPath: photoPath, photoBytes: null);

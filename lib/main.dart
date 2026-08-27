@@ -92,8 +92,8 @@ class _HomePageState extends State<HomePage> {
     );
     if (dog == null || _repository == null) return;
     try {
-      await _repository!.saveDog(dog);
-      if (mounted) setState(() => _dogs = [dog, ..._dogs]);
+      final savedDog = await _repository!.saveDog(dog);
+      if (mounted) setState(() => _dogs = [savedDog, ..._dogs]);
     } catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -317,20 +317,12 @@ class _DogTile extends StatelessWidget {
     elevation: 0,
     color: Colors.white,
     child: ListTile(
+      onTap: () {
+        Navigator.of(context).push(
+          MaterialPageRoute<void>(builder: (_) => _DogDetailsPage(dog: dog)),
+        );
+      },
       contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
-      leading: CircleAvatar(
-        radius: 28,
-        backgroundColor: const Color(0xffdcefe7),
-        backgroundImage: (dog.photoPath?.startsWith('http') ?? false)
-            ? NetworkImage(dog.photoPath!)
-            : null,
-        child: !(dog.photoPath?.startsWith('http') ?? false)
-            ? Icon(
-                Icons.pets_rounded,
-                color: Theme.of(context).colorScheme.primary,
-              )
-            : null,
-      ),
       title: Text(
         dog.name.isEmpty ? 'Unnamed ${dog.animalCategory}' : dog.name,
         style: const TextStyle(fontWeight: FontWeight.w700),
@@ -338,13 +330,179 @@ class _DogTile extends StatelessWidget {
       subtitle: Text(
         'Tag ID: ${dog.identification.isEmpty ? 'not set' : dog.identification}',
       ),
-      trailing: Icon(
-        dog.hasLocation
-            ? Icons.location_on_rounded
-            : Icons.location_off_outlined,
-        color: dog.hasLocation ? const Color(0xff1c6b5a) : Colors.black26,
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          ClipOval(
+            child: SizedBox(
+              width: 56,
+              height: 56,
+              child: dog.photoPath?.startsWith('http') ?? false
+                  ? Image.network(
+                      dog.photoPath!,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, _, _) => _photoPlaceholder(context),
+                    )
+                  : _photoPlaceholder(context),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Icon(
+            dog.hasLocation
+                ? Icons.location_on_rounded
+                : Icons.location_off_outlined,
+            color: dog.hasLocation ? const Color(0xff1c6b5a) : Colors.black26,
+          ),
+        ],
       ),
     ),
+  );
+
+  Widget _photoPlaceholder(BuildContext context) => Container(
+    color: const Color(0xffdcefe7),
+    child: Icon(
+      Icons.pets_rounded,
+      color: Theme.of(context).colorScheme.primary,
+    ),
+  );
+}
+
+class _DogDetailsPage extends StatelessWidget {
+  const _DogDetailsPage({required this.dog});
+
+  final Dog dog;
+
+  @override
+  Widget build(BuildContext context) {
+    final hasPhoto = dog.photoPath?.startsWith('http') ?? false;
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Dog details'),
+        backgroundColor: const Color(0xfff5f3ee),
+      ),
+      body: ListView(
+        padding: const EdgeInsets.fromLTRB(20, 20, 20, 32),
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Expanded(
+                child: Text(
+                  dog.name.isEmpty ? 'Unnamed ${dog.animalCategory}' : dog.name,
+                  style: Theme.of(context).textTheme.headlineMedium
+                      ?.copyWith(fontWeight: FontWeight.w800),
+                ),
+              ),
+              const SizedBox(width: 16),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(16),
+                child: SizedBox(
+                  width: 120,
+                  height: 120,
+                  child: hasPhoto
+                      ? Image.network(
+                          dog.photoPath!,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, _, _) =>
+                              _detailPhotoPlaceholder(context),
+                        )
+                      : _detailPhotoPlaceholder(context),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          _DetailSection(
+            title: 'Primary details',
+            values: [
+              _DetailValue('Tag ID', _display(dog.identification)),
+              _DetailValue('Animal category', dog.animalCategory),
+              _DetailValue('Gender', _display(dog.gender)),
+              _DetailValue('Age', _display(dog.age)),
+              _DetailValue('Color', _display(dog.color)),
+              _DetailValue('Breed', _display(dog.breed)),
+              _DetailValue('Identifying marks', _display(dog.identifyingMarks)),
+              _DetailValue('Notes', _display(dog.notes)),
+              _DetailValue('Address', _display(dog.address)),
+              _DetailValue('Area', _display(dog.area)),
+            ],
+          ),
+          const SizedBox(height: 16),
+          _DetailSection(
+            title: 'Record information',
+            values: [
+              _DetailValue('Record ID', dog.id),
+              _DetailValue('Created', _formatDate(dog.createdAt)),
+              _DetailValue('Last updated', _formatDate(dog.updatedAt)),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _detailPhotoPlaceholder(BuildContext context) => Container(
+    color: const Color(0xffdcefe7),
+    child: Icon(
+      Icons.pets_rounded,
+      size: 42,
+      color: Theme.of(context).colorScheme.primary,
+    ),
+  );
+
+  String _display(String? value) =>
+      value == null || value.trim().isEmpty ? 'Not provided' : value;
+
+  String _formatDate(DateTime value) => value.toLocal().toString();
+}
+
+class _DetailValue {
+  const _DetailValue(this.label, this.value);
+
+  final String label;
+  final String value;
+}
+
+class _DetailSection extends StatelessWidget {
+  const _DetailSection({required this.title, required this.values});
+
+  final String title;
+  final List<_DetailValue> values;
+
+  @override
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Text(
+        title,
+        style: Theme.of(context).textTheme.titleMedium
+            ?.copyWith(fontWeight: FontWeight.w800),
+      ),
+      const SizedBox(height: 8),
+      ...values.map(
+        (item) => Padding(
+          padding: const EdgeInsets.symmetric(vertical: 9),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              SizedBox(
+                width: 132,
+                child: Text(
+                  item.label,
+                  style: const TextStyle(color: Colors.black54),
+                ),
+              ),
+              Expanded(
+                child: Text(
+                  item.value,
+                  style: const TextStyle(fontWeight: FontWeight.w600),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    ],
   );
 }
 
