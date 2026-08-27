@@ -16,9 +16,8 @@ Never use a service-role key in the Flutter app.
 
 ## Prisma database connection
 
-Prisma is configured for the Supabase PostgreSQL database at
-`db.mtyouhpigpohzjifhdxz.supabase.co:5432`, database `postgres`, user
-`postgres`, and schema `treatfeedtails`. Copy `.env.example` to `.env`, replace
+Prisma uses Supabase's transaction-mode pooler for application queries and
+session-mode pooler for migrations. Copy `.env.example` to `.env`, replace
 `[YOUR-PASSWORD]`, then run:
 
 ```text
@@ -35,6 +34,10 @@ CLI or run it in the Supabase SQL Editor.
 
 In the Supabase dashboard, add `treatfeedtails` under **Settings -> API ->
 Exposed schemas** so the Flutter client can reach the table.
+
+The client must be restarted after changing the exposed schemas. The current
+error `PGRST106: Invalid schema: treatfeedtails` means this dashboard setting
+has not been applied yet.
 
 ## Getting Started
 

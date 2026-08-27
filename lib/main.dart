@@ -78,8 +78,15 @@ class _HomePageState extends State<HomePage> {
       builder: (_) => const _AddDogDialog(),
     );
     if (dog == null || _repository == null) return;
-    await _repository!.saveDog(dog);
-    if (mounted) setState(() => _dogs = [dog, ..._dogs]);
+    try {
+      await _repository!.saveDog(dog);
+      if (mounted) setState(() => _dogs = [dog, ..._dogs]);
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not save to Supabase: $error')),
+      );
+    }
   }
 
   @override
