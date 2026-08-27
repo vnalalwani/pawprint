@@ -2,6 +2,27 @@ CREATE SCHEMA IF NOT EXISTS treatfeedtails;
 
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
+INSERT INTO storage.buckets (id, name, public)
+VALUES ('furryfriends', 'furryfriends', true)
+ON CONFLICT (id) DO UPDATE SET public = EXCLUDED.public;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies
+        WHERE schemaname = 'storage' AND tablename = 'objects'
+          AND policyname = 'public dog photo access'
+    ) THEN
+        CREATE POLICY "public dog photo access"
+            ON storage.objects
+            FOR ALL
+            TO anon, authenticated
+            USING (bucket_id = 'furryfriends')
+            WITH CHECK (bucket_id = 'furryfriends');
+    END IF;
+END
+$$;
+
 CREATE OR REPLACE FUNCTION treatfeedtails.generate_dog_tag_id()
 RETURNS TEXT
 LANGUAGE sql

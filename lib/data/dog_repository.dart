@@ -1,10 +1,6 @@
-import 'package:flutter/foundation.dart';
-import 'package:path/path.dart' as p;
-import 'package:path_provider/path_provider.dart';
-import 'package:sembast/sembast_io.dart';
-import 'package:sembast/sembast_memory.dart';
-import 'package:sembast_web/sembast_web.dart';
-import 'package:supabase_flutter/supabase_flutter.dart' show Supabase;
+import 'dart:typed_data';
+
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:uuid/uuid.dart';
 
 import '../config/supabase_config.dart';
@@ -12,129 +8,168 @@ import '../models/dog.dart';
 import '../models/vaccination.dart';
 
 class DogRepository {
-  DogRepository._(this._db);
+  DogRepository._();
 
-  final Database _db;
-  final _dogs = stringMapStoreFactory.store('dogs');
-  final _vaccinations = stringMapStoreFactory.store('vaccinations');
-  final _photos = StoreRef<String, Uint8List>('photos');
   static const _uuid = Uuid();
+  static const _photoBucket = 'furryfriends';
 
-  static Future<DogRepository> open() async {
-    final Database db;
-    if (kIsWeb) {
-      db = await databaseFactoryWeb.openDatabase('pawprint.db');
-    } else {
-      final dir = await getApplicationDocumentsDirectory();
-      db = await databaseFactoryIo.openDatabase(
-        p.join(dir.path, 'pawprint.db'),
-      );
+  static Future<DogRepository> open() async => DogRepository._();
+
+  SupabaseClient get _client => Supabase.instance.client;
+
+  void _requireConnection() {
+    if (!SupabaseConfig.isInitialized) {
+      throw StateError('Supabase is not configured.');
     }
-    return DogRepository._(db);
-  }
-
-  static Future<DogRepository> openMemory() async {
-    final db = await newDatabaseFactoryMemory().openDatabase('pawprint.db');
-    return DogRepository._(db);
   }
 
   Future<List<Dog>> allDogs() async {
-    final records = await _dogs.find(
-      _db,
-      finder: Finder(sortOrders: [SortOrder('updatedAt', false)]),
+    _requireConnection();
+    final rows = await _client
+        .from('primary_dog_details')
+        .select()
+        .order('updated_date', ascending: false);
+    return rows.map(_dogFromSupabase).toList();
+  }
+
+  Dog _dogFromSupabase(Map<String, dynamic> row) {
+    final photoPath = row['photo_path'] as String?;
+    final createdDate = DateTime.parse(row['created_date'] as String);
+    final updatedDate = DateTime.parse(row['updated_date'] as String);
+    return Dog(
+      id: row['id'] as String,
+      animalCategory: (row['animal_category'] as String?) ?? 'dog',
+      identification: (row['tag_id'] as String?) ?? '',
+      name: (row['name'] as String?) ?? '',
+      photoPath: photoPath,
+      photoKey: photoPath != null && !photoPath.startsWith('http')
+          ? photoPath
+          : null,
+      gender: (row['gender'] as String?) ?? '',
+      age: row['age']?.toString() ?? '',
+      color: (row['color'] as String?) ?? '',
+      breed: (row['breed'] as String?) ?? '',
+      identifyingMarks: (row['identifying_marks'] as String?) ?? '',
+      medicalIssues: (row['identifying_marks'] as String?) ?? '',
+      notes: (row['notes'] as String?) ?? '',
+      address: (row['address'] as String?) ?? '',
+      locationNote: (row['address'] as String?) ?? '',
+      area: (row['area'] as String?) ?? '',
+      createdAt: createdDate,
+      updatedAt: updatedDate,
     );
-    return records.map((record) => Dog.fromMap(record.value)).toList();
   }
 
   Future<Dog?> dogById(String id) async {
-    final value = await _dogs.record(id).get(_db);
-    return value == null ? null : Dog.fromMap(value);
+    _requireConnection();
+    final row = await _client
+        .from('primary_dog_details')
+        .select()
+        .eq('id', id)
+        .maybeSingle();
+    return row == null ? null : _dogFromSupabase(row);
   }
 
   Future<Dog> saveDog(Dog dog) async {
-    var persistedDog = dog;
-    if (dog.photoBytes != null && dog.photoKey == null) {
-      final photoKey = await savePhotoBytes(dog.photoBytes!);
-      persistedDog = dog.copyWith(photoKey: photoKey);
-    }
-    await _dogs.record(persistedDog.id).put(_db, persistedDog.toMap());
+    _requireConnection();
+    final record = <String, Object?>{
+      'id': dog.id,
+      'animal_category': dog.animalCategory,
+      'photo_path': dog.photoPath,
+      'name': dog.name,
+      'gender': dog.gender,
+      'age': int.tryParse(dog.age),
+      'color': dog.color,
+      'breed': dog.breed,
+      'identifying_marks': dog.identifyingMarks.isEmpty
+          ? dog.medicalIssues
+          : dog.identifyingMarks,
+      'notes': dog.notes,
+      'address': dog.address.isEmpty ? dog.locationNote : dog.address,
+      'area': dog.area,
+      'created_date': dog.createdAt.toIso8601String(),
+      'updated_date': dog.updatedAt.toIso8601String(),
+    };
+    if (dog.identification.isNotEmpty) record['tag_id'] = dog.identification;
+    await _client.from('primary_dog_details').upsert(record, onConflict: 'id');
 
-    if (SupabaseConfig.isInitialized) {
-      final record = <String, Object?>{
-        'id': persistedDog.id,
-        'animal_category': persistedDog.animalCategory,
-        'photo_path': persistedDog.photoPath ?? persistedDog.photoKey,
-        'name': persistedDog.name,
-        'gender': persistedDog.gender,
-        'age': int.tryParse(persistedDog.age),
-        'color': persistedDog.color,
-        'breed': persistedDog.breed,
-        'identifying_marks': persistedDog.identifyingMarks.isEmpty
-            ? persistedDog.medicalIssues
-            : persistedDog.identifyingMarks,
-        'notes': persistedDog.notes,
-        'address': persistedDog.address.isEmpty
-            ? persistedDog.locationNote
-            : persistedDog.address,
-        'area': persistedDog.area,
-        'created_date': persistedDog.createdAt.toIso8601String(),
-        'updated_date': persistedDog.updatedAt.toIso8601String(),
-      };
-      if (persistedDog.identification.isNotEmpty) {
-        record['tag_id'] = persistedDog.identification;
+    var photoPath = dog.photoPath;
+    if (dog.photoBytes != null) {
+      final storagePath = 'images/${dog.id}.jpg';
+      final storage = _client.storage.from(_photoBucket);
+      try {
+        await storage.remove([storagePath]);
+      } catch (_) {
+        // The upload below can still succeed when there is no old file.
       }
-
-      await Supabase.instance.client
+      await storage.uploadBinary(storagePath, dog.photoBytes!);
+      photoPath = storage.getPublicUrl(storagePath);
+      await _client
           .from('primary_dog_details')
-          .upsert(record, onConflict: 'id');
+          .update({'photo_path': photoPath})
+          .eq('id', dog.id);
     }
 
-    return persistedDog;
+    return dog.copyWith(photoPath: photoPath, photoBytes: null);
   }
 
   Future<void> deleteDog(String id) async {
-    await _db.transaction((txn) async {
-      await _dogs.record(id).delete(txn);
-      await _photos.record(id).delete(txn);
-      final shots = await _vaccinations.find(
-        txn,
-        finder: Finder(filter: Filter.equals('dogId', id)),
-      );
-      for (final shot in shots) {
-        await shot.ref.delete(txn);
-      }
-    });
+    _requireConnection();
+    await _client.from('primary_dog_details').delete().eq('id', id);
+    await _client.storage.from(_photoBucket).remove(['images/$id.jpg']);
   }
 
   Future<List<Vaccination>> vaccinationsFor(String dogId) async {
-    final records = await _vaccinations.find(
-      _db,
-      finder: Finder(
-        filter: Filter.equals('dogId', dogId),
-        sortOrders: [SortOrder('dateGiven', false)],
-      ),
-    );
-    return records.map((record) => Vaccination.fromMap(record.value)).toList();
+    _requireConnection();
+    final rows = await _client
+        .from('vaccinations')
+        .select()
+        .eq('dog_id', dogId)
+        .order('date_given', ascending: false);
+    return rows
+        .map(
+          (row) => Vaccination.fromMap({
+            'id': row['id'],
+            'dogId': row['dog_id'],
+            'name': row['name'],
+            'dateGiven': row['date_given'],
+            'nextDue': row['next_due'],
+            'notes': row['notes'],
+          }),
+        )
+        .toList();
   }
 
   Future<Vaccination> saveVaccination(Vaccination shot) async {
-    await _vaccinations.record(shot.id).put(_db, shot.toMap());
+    _requireConnection();
+    await _client.from('vaccinations').upsert({
+      'id': shot.id,
+      'dog_id': shot.dogId,
+      'name': shot.name,
+      'date_given': shot.dateGiven.toIso8601String(),
+      'next_due': shot.nextDue?.toIso8601String(),
+      'notes': shot.notes,
+    }, onConflict: 'id');
     return shot;
   }
 
   Future<void> deleteVaccination(String id) async {
-    await _vaccinations.record(id).delete(_db);
+    _requireConnection();
+    await _client.from('vaccinations').delete().eq('id', id);
   }
 
   Future<String> savePhotoBytes(Uint8List bytes) async {
-    final key = _uuid.v4();
-    await _photos.record(key).put(_db, bytes);
-    return key;
+    _requireConnection();
+    final path = 'images/${_uuid.v4()}.jpg';
+    final storage = _client.storage.from(_photoBucket);
+    await storage.uploadBinary(path, bytes);
+    return storage.getPublicUrl(path);
   }
 
-  Future<Uint8List?> photoBytes(String key) => _photos.record(key).get(_db);
-
-  Future<void> deletePhoto(String key) => _photos.record(key).delete(_db);
+  Future<void> deletePhoto(String path) async {
+    _requireConnection();
+    await _client.storage.from(_photoBucket).remove([path]);
+  }
 
   static String newId() => _uuid.v4();
 }

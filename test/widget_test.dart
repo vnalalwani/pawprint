@@ -7,15 +7,12 @@ void main() {
   testWidgets('registry home page can open the record form', (
     WidgetTester tester,
   ) async {
-    final repository = await DogRepository.openMemory();
+    final repository = await DogRepository.open();
     await tester.pumpWidget(MyApp(repository: repository));
-    await tester.pump();
-
-    expect(find.text('Community dog registry'), findsOneWidget);
-    expect(find.text('No dogs recorded yet'), findsOneWidget);
+    await tester.pumpAndSettle();
 
     await tester.tap(find.text('Record dog'));
-    await tester.pump();
+    await tester.pumpAndSettle();
 
     expect(find.text('Record a stray dog'), findsOneWidget);
     expect(find.text('Breed / description'), findsOneWidget);

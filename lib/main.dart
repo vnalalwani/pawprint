@@ -61,7 +61,16 @@ class _HomePageState extends State<HomePage> {
 
   Future<void> _loadDogs() async {
     final repository = widget.repository ?? await DogRepository.open();
-    final dogs = await repository.allDogs();
+    List<Dog> dogs = [];
+    try {
+      dogs = await repository.allDogs();
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not load Supabase records: $error')),
+        );
+      }
+    }
     if (!mounted) return;
     setState(() {
       _repository = repository;
@@ -103,12 +112,15 @@ class _HomePageState extends State<HomePage> {
 
     return Scaffold(
       appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        title: Image.asset(
-          'logo.png',
-          width: 132,
-          height: 48,
-          fit: BoxFit.contain,
+        backgroundColor: const Color(0xfff5f3ee),
+        toolbarHeight: 94,
+        flexibleSpace: Center(
+          child: Image.asset(
+            'logo.png',
+            width: 300,
+            height: 94,
+            fit: BoxFit.contain,
+          ),
         ),
         actions: [
           IconButton(
@@ -136,22 +148,8 @@ class _HomePageState extends State<HomePage> {
           : RefreshIndicator(
               onRefresh: _loadDogs,
               child: ListView(
-                padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
+                padding: const EdgeInsets.fromLTRB(20, 0, 20, 32),
                 children: [
-                  Text(
-                    'Good morning, volunteer',
-                    style: Theme.of(context).textTheme.bodyLarge
-                        ?.copyWith(color: Colors.black54),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    'Community dog registry',
-                    style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                      fontWeight: FontWeight.w800,
-                      color: const Color(0xff173d36),
-                    ),
-                  ),
-                  const SizedBox(height: 20),
                   _WelcomePanel(onAddDog: _addDog),
                   const SizedBox(height: 18),
                   Row(
@@ -250,7 +248,7 @@ class _WelcomePanel extends StatelessWidget {
               ),
               SizedBox(height: 6),
               Text(
-                'Keep your neighborhood dogs visible, cared for, and connected.',
+                'Keep your pawfriends close, safe, and connected.',
                 style: TextStyle(color: Color(0xffd2ebe1), height: 1.35),
               ),
             ],
@@ -321,18 +319,24 @@ class _DogTile extends StatelessWidget {
     child: ListTile(
       contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
       leading: CircleAvatar(
+        radius: 28,
         backgroundColor: const Color(0xffdcefe7),
-        child: Icon(
-          Icons.pets_rounded,
-          color: Theme.of(context).colorScheme.primary,
-        ),
+        backgroundImage: (dog.photoPath?.startsWith('http') ?? false)
+            ? NetworkImage(dog.photoPath!)
+            : null,
+        child: !(dog.photoPath?.startsWith('http') ?? false)
+            ? Icon(
+                Icons.pets_rounded,
+                color: Theme.of(context).colorScheme.primary,
+              )
+            : null,
       ),
       title: Text(
-        dog.name,
+        dog.name.isEmpty ? 'Unnamed ${dog.animalCategory}' : dog.name,
         style: const TextStyle(fontWeight: FontWeight.w700),
       ),
       subtitle: Text(
-        '${dog.breed}  -  ID ${dog.identification.isEmpty ? 'not set' : dog.identification}',
+        'Tag ID: ${dog.identification.isEmpty ? 'not set' : dog.identification}',
       ),
       trailing: Icon(
         dog.hasLocation
@@ -417,14 +421,21 @@ class _AddDogDialogState extends State<_AddDogDialog> {
   }
 
   Future<void> _pickPhoto(ImageSource source) async {
-    final file = await ImagePicker().pickImage(source: source);
-    if (file == null) return;
-    final bytes = await file.readAsBytes();
-    if (!mounted) return;
-    setState(() {
-      _photoBytes = bytes;
-      _photoName = file.name;
-    });
+    try {
+      final file = await ImagePicker().pickImage(source: source);
+      if (file == null) return;
+      final bytes = await file.readAsBytes();
+      if (!mounted) return;
+      setState(() {
+        _photoBytes = bytes;
+        _photoName = file.name;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Could not load photo: $error')));
+    }
   }
 
   Future<void> _useCurrentLocation() async {
@@ -491,154 +502,175 @@ class _AddDogDialogState extends State<_AddDogDialog> {
   }
 
   @override
-  Widget build(BuildContext context) => AlertDialog(
-    title: const Text('Record a stray dog'),
-    content: Form(
-      key: _formKey,
-      child: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            DropdownButtonFormField<String>(
-              initialValue: _animalCategory,
-              decoration: const InputDecoration(labelText: 'Animal category'),
-              items: const [
-                DropdownMenuItem(value: 'dog', child: Text('Dog')),
-                DropdownMenuItem(value: 'cat', child: Text('Cat')),
-              ],
-              onChanged: (value) {
-                if (value != null) setState(() => _animalCategory = value);
-              },
-            ),
-            TextFormField(
-              controller: _name,
-              autofocus: true,
-              decoration: const InputDecoration(
-                labelText: 'Name',
-                hintText: 'A friendly name',
-              ),
-            ),
-            TextFormField(
-              controller: _breed,
-              decoration: const InputDecoration(
-                labelText: 'Breed / description',
-              ),
-            ),
-            TextFormField(
-              controller: _id,
-              decoration: const InputDecoration(
-                labelText: 'Tag or ID (optional)',
-              ),
-            ),
-            if (_photoBytes != null)
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 10),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(8),
-                  child: Image.memory(
-                    _photoBytes!,
-                    height: 140,
-                    width: double.infinity,
-                    fit: BoxFit.cover,
-                  ),
-                ),
-              ),
-            Row(
+  Widget build(BuildContext context) {
+    final dialogHeight = MediaQuery.sizeOf(context).height * 0.7;
+    return AlertDialog(
+      title: const Text('Record a stray dog'),
+      content: SizedBox(
+        width: 320,
+        height: dialogHeight,
+        child: Form(
+          key: _formKey,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
               children: [
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: () => _pickPhoto(ImageSource.camera),
-                    icon: const Icon(Icons.camera_alt_outlined),
-                    label: const Text('Take photo'),
+                DropdownButtonFormField<String>(
+                  initialValue: _animalCategory,
+                  decoration: const InputDecoration(
+                    labelText: 'Animal category',
+                  ),
+                  items: const [
+                    DropdownMenuItem(value: 'dog', child: Text('Dog')),
+                    DropdownMenuItem(value: 'cat', child: Text('Cat')),
+                  ],
+                  onChanged: (value) {
+                    if (value != null) setState(() => _animalCategory = value);
+                  },
+                ),
+                TextFormField(
+                  controller: _name,
+                  autofocus: true,
+                  decoration: const InputDecoration(
+                    labelText: 'Name',
+                    hintText: 'A friendly name',
                   ),
                 ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: () => _pickPhoto(ImageSource.gallery),
-                    icon: const Icon(Icons.photo_library_outlined),
-                    label: const Text('Browse photos'),
+                TextFormField(
+                  controller: _breed,
+                  decoration: const InputDecoration(
+                    labelText: 'Breed / description',
+                  ),
+                ),
+                TextFormField(
+                  controller: _id,
+                  decoration: const InputDecoration(
+                    labelText: 'Tag or ID (optional)',
+                  ),
+                ),
+                if (_photoBytes != null)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 10),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: Image.memory(
+                        _photoBytes!,
+                        height: 140,
+                        width: 320,
+                        fit: BoxFit.cover,
+                      ),
+                    ),
+                  ),
+                Row(
+                  children: [
+                    SizedBox(
+                      width: 145,
+                      child: OutlinedButton.icon(
+                        onPressed: () => _pickPhoto(ImageSource.camera),
+                        icon: const Icon(Icons.camera_alt_outlined),
+                        label: const Text('Take photo'),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    SizedBox(
+                      width: 145,
+                      child: OutlinedButton.icon(
+                        onPressed: () => _pickPhoto(ImageSource.gallery),
+                        icon: const Icon(Icons.photo_library_outlined),
+                        label: const Text('Browse photos'),
+                      ),
+                    ),
+                  ],
+                ),
+                if (_photoName != null)
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Padding(
+                      padding: const EdgeInsets.only(top: 4),
+                      child: Text(
+                        _photoName!,
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                    ),
+                  ),
+                TextFormField(
+                  controller: _gender,
+                  decoration: const InputDecoration(
+                    labelText: 'Gender (optional)',
+                  ),
+                ),
+                TextFormField(
+                  controller: _age,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(
+                    labelText: 'Age (optional)',
+                  ),
+                  validator: (value) =>
+                      value != null &&
+                          value.trim().isNotEmpty &&
+                          int.tryParse(value.trim()) == null
+                      ? 'Age must be a whole number'
+                      : null,
+                ),
+                TextFormField(
+                  controller: _color,
+                  decoration: const InputDecoration(
+                    labelText: 'Color (optional)',
+                  ),
+                ),
+                TextFormField(
+                  controller: _identifyingMarks,
+                  maxLines: 2,
+                  decoration: const InputDecoration(
+                    labelText: 'Identifying marks (optional)',
+                  ),
+                ),
+                TextFormField(
+                  controller: _notes,
+                  maxLines: 2,
+                  decoration: const InputDecoration(
+                    labelText: 'Notes (optional)',
+                  ),
+                ),
+                TextFormField(
+                  controller: _address,
+                  decoration: const InputDecoration(
+                    labelText: 'Address (optional)',
+                    suffixIcon: Icon(Icons.location_on_outlined),
+                  ),
+                ),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: TextButton.icon(
+                    onPressed: _gettingLocation ? null : _useCurrentLocation,
+                    icon: _gettingLocation
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.my_location),
+                    label: const Text('Use current location'),
+                  ),
+                ),
+                TextFormField(
+                  controller: _area,
+                  decoration: const InputDecoration(
+                    labelText: 'Area (optional)',
                   ),
                 ),
               ],
             ),
-            if (_photoName != null)
-              Align(
-                alignment: Alignment.centerLeft,
-                child: Padding(
-                  padding: const EdgeInsets.only(top: 4),
-                  child: Text(
-                    _photoName!,
-                    style: Theme.of(context).textTheme.bodySmall,
-                  ),
-                ),
-              ),
-            TextFormField(
-              controller: _gender,
-              decoration: const InputDecoration(labelText: 'Gender (optional)'),
-            ),
-            TextFormField(
-              controller: _age,
-              keyboardType: TextInputType.number,
-              decoration: const InputDecoration(labelText: 'Age (optional)'),
-              validator: (value) =>
-                  value != null &&
-                      value.trim().isNotEmpty &&
-                      int.tryParse(value.trim()) == null
-                  ? 'Age must be a whole number'
-                  : null,
-            ),
-            TextFormField(
-              controller: _color,
-              decoration: const InputDecoration(labelText: 'Color (optional)'),
-            ),
-            TextFormField(
-              controller: _identifyingMarks,
-              maxLines: 2,
-              decoration: const InputDecoration(
-                labelText: 'Identifying marks (optional)',
-              ),
-            ),
-            TextFormField(
-              controller: _notes,
-              maxLines: 2,
-              decoration: const InputDecoration(labelText: 'Notes (optional)'),
-            ),
-            TextFormField(
-              controller: _address,
-              decoration: const InputDecoration(
-                labelText: 'Address (optional)',
-                suffixIcon: Icon(Icons.location_on_outlined),
-              ),
-            ),
-            Align(
-              alignment: Alignment.centerLeft,
-              child: TextButton.icon(
-                onPressed: _gettingLocation ? null : _useCurrentLocation,
-                icon: _gettingLocation
-                    ? const SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(Icons.my_location),
-                label: const Text('Use current location'),
-              ),
-            ),
-            TextFormField(
-              controller: _area,
-              decoration: const InputDecoration(labelText: 'Area (optional)'),
-            ),
-          ],
+          ),
         ),
       ),
-    ),
-    actions: [
-      TextButton(
-        onPressed: () => Navigator.pop(context),
-        child: const Text('Cancel'),
-      ),
-      FilledButton(onPressed: _save, child: const Text('Save record')),
-    ],
-  );
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(onPressed: _save, child: const Text('Save record')),
+      ],
+    );
+  }
 }

@@ -392,14 +392,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "4.1.2"
-  idb_shim:
-    dependency: transitive
-    description:
-      name: idb_shim
-      sha256: e36a748165663a165e1f292e9d85af6e3aa087f6e2291d16f86b2035103b2950
-      url: "https://pub.dev"
-    source: hosted
-    version: "2.9.8"
   image_picker:
     dependency: "direct main"
     description:
@@ -633,7 +625,7 @@ packages:
     source: hosted
     version: "2.9.0"
   path:
-    dependency: "direct main"
+    dependency: transitive
     description:
       name: path
       sha256: "75cca69d1490965be98c73ceaea117e8a04dd21217b37b292c9ddbec0d955bc5"
@@ -641,7 +633,7 @@ packages:
     source: hosted
     version: "1.9.1"
   path_provider:
-    dependency: "direct main"
+    dependency: transitive
     description:
       name: path_provider
       sha256: a7f4874f987173da295a61c181b8ee71dab59b332a486b391babf26a1b884825
@@ -768,22 +760,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "0.6.0"
-  sembast:
-    dependency: "direct main"
-    description:
-      name: sembast
-      sha256: a58b26925e23071cf0f4754d8449aabe829e9a9930a872fb18e6ae4c2c88e025
-      url: "https://pub.dev"
-    source: hosted
-    version: "3.8.9+1"
-  sembast_web:
-    dependency: "direct main"
-    description:
-      name: sembast_web
-      sha256: f466feb09fd2b403ebe3f462880a6f9118e1488f14e32a61e21f9209264a066b
-      url: "https://pub.dev"
-    source: hosted
-    version: "2.4.5+1"
   shared_preferences:
     dependency: transitive
     description:
@@ -917,14 +893,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "2.17.2"
-  synchronized:
-    dependency: transitive
-    description:
-      name: synchronized
-      sha256: "3a7b5d17422dd0f8d5c6c14feaa5a1c65638b9455f871a96f08437562c046931"
-      url: "https://pub.dev"
-    source: hosted
-    version: "3.4.1+2"
   term_glyph:
     dependency: transitive
     description:
