@@ -9,6 +9,7 @@ import 'config/supabase_config.dart';
 
 import 'data/dog_repository.dart';
 import 'models/dog.dart';
+import 'models/dog_health_details.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -87,18 +88,45 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<void> _addDog() async {
-    final dog = await showDialog<Dog>(
+    final draft = await showDialog<_DogRecordDraft>(
       context: context,
       builder: (_) => const _AddDogDialog(),
     );
-    if (dog == null || _repository == null) return;
+    if (draft == null || _repository == null) return;
     try {
-      final savedDog = await _repository!.saveDog(dog);
+      final savedDog = await _repository!.saveDog(draft.dog);
+      await _repository!.saveHealthDetails(draft.healthDetails);
       if (mounted) setState(() => _dogs = [savedDog, ..._dogs]);
     } catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Could not save to Supabase: $error')),
+      );
+    }
+  }
+
+  Future<void> _editDog(Dog dog) async {
+    final draft = await showDialog<_DogRecordDraft>(
+      context: context,
+      builder: (_) => _AddDogDialog(dog: dog),
+    );
+    if (draft == null || _repository == null) return;
+    try {
+      final savedDog = await _repository!.saveDog(draft.dog);
+      await _repository!.saveHealthDetails(draft.healthDetails);
+      if (!mounted) return;
+      setState(() {
+        _dogs = _dogs
+            .map(
+              (existingDog) =>
+                  existingDog.id == savedDog.id ? savedDog : existingDog,
+            )
+            .toList();
+      });
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not update Supabase record: $error')),
       );
     }
   }
@@ -153,31 +181,44 @@ class _HomePageState extends State<HomePage> {
                 children: [
                   _WelcomePanel(onAddDog: _addDog),
                   const SizedBox(height: 18),
-                  Row(
-                    children: [
-                      _StatTile(
-                        label: 'Registered',
-                        value: '${_dogs.length}',
-                        icon: Icons.pets_rounded,
-                        color: const Color(0xffdcefe7),
-                      ),
-                      const SizedBox(width: 10),
-                      _StatTile(
-                        label: 'Located',
-                        value:
-                            '${_dogs.where((dog) => dog.hasLocation).length}',
-                        icon: Icons.location_on_outlined,
-                        color: const Color(0xfff5e8cd),
-                      ),
-                      const SizedBox(width: 10),
-                      _StatTile(
-                        label: 'Sterilized',
-                        value:
-                            '${_dogs.where((dog) => dog.sterilization == SterilizationStatus.yes).length}',
-                        icon: Icons.favorite_border_rounded,
-                        color: const Color(0xfff1dedb),
-                      ),
-                    ],
+                  LayoutBuilder(
+                    builder: (context, constraints) => GridView.count(
+                      crossAxisCount: 4,
+                      crossAxisSpacing: 8,
+                      mainAxisSpacing: 8,
+                      mainAxisExtent: 68,
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      children: [
+                        _StatTile(
+                          label: 'Registered',
+                          value: '${_dogs.length}',
+                          icon: const Icon(Icons.pets_rounded),
+                          color: const Color(0xffdcefe7),
+                        ),
+                        _StatTile(
+                          label: 'Sterilized',
+                          value:
+                              '${_dogs.where((dog) => dog.sterilization == SterilizationStatus.yes).length}',
+                          icon: const _SterilizedIcon(),
+                          color: const Color(0xfff1dedb),
+                        ),
+                        _StatTile(
+                          label: 'Rabies',
+                          value:
+                              '${_dogs.where((dog) => dog.rabiesVaccinated).length}',
+                          icon: const _RabiesIcon(),
+                          color: const Color(0xffdde8f5),
+                        ),
+                        _StatTile(
+                          label: '9-in-1',
+                          value:
+                              '${_dogs.where((dog) => dog.nineInOneVaccinated).length}',
+                          icon: const Icon(Icons.vaccines_outlined),
+                          color: const Color(0xffe9e2f2),
+                        ),
+                      ],
+                    ),
                   ),
                   const SizedBox(height: 24),
                   Text(
@@ -209,7 +250,9 @@ class _HomePageState extends State<HomePage> {
                   if (visibleDogs.isEmpty)
                     _EmptyState(onAddDog: _addDog)
                   else
-                    ...visibleDogs.map((dog) => _DogTile(dog: dog)),
+                    ...visibleDogs.map(
+                      (dog) => _DogTile(dog: dog, onEdit: () => _editDog(dog)),
+                    ),
                 ],
               ),
             ),
@@ -278,29 +321,29 @@ class _StatTile extends StatelessWidget {
     required this.color,
   });
   final String label, value;
-  final IconData icon;
+  final Widget icon;
   final Color color;
 
   @override
-  Widget build(BuildContext context) => Expanded(
+  Widget build(BuildContext context) => Tooltip(
+    message: label,
     child: Container(
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
         color: color,
         borderRadius: BorderRadius.circular(16),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(icon, size: 20, color: const Color(0xff24574b)),
-          const SizedBox(height: 9),
+          IconTheme(
+            data: const IconThemeData(size: 24, color: Color(0xff24574b)),
+            child: icon,
+          ),
+          const SizedBox(width: 10),
           Text(
             value,
-            style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800),
-          ),
-          Text(
-            label,
-            style: const TextStyle(fontSize: 12, color: Colors.black54),
+            style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w800),
           ),
         ],
       ),
@@ -308,9 +351,56 @@ class _StatTile extends StatelessWidget {
   );
 }
 
+class _RabiesIcon extends StatelessWidget {
+  const _RabiesIcon();
+
+  @override
+  Widget build(BuildContext context) => Container(
+    width: 24,
+    height: 24,
+    alignment: Alignment.center,
+    decoration: BoxDecoration(
+      border: Border.all(color: const Color(0xff24574b), width: 2),
+      shape: BoxShape.circle,
+    ),
+    child: const Text(
+      'R',
+      style: TextStyle(
+        color: Color(0xff24574b),
+        fontSize: 15,
+        fontWeight: FontWeight.w800,
+      ),
+    ),
+  );
+}
+
+class _SterilizedIcon extends StatelessWidget {
+  const _SterilizedIcon();
+
+  @override
+  Widget build(BuildContext context) => Container(
+    width: 24,
+    height: 24,
+    alignment: Alignment.center,
+    decoration: BoxDecoration(
+      border: Border.all(color: const Color(0xff24574b), width: 2),
+      shape: BoxShape.circle,
+    ),
+    child: const Text(
+      'S',
+      style: TextStyle(
+        color: Color(0xff24574b),
+        fontSize: 15,
+        fontWeight: FontWeight.w800,
+      ),
+    ),
+  );
+}
+
 class _DogTile extends StatelessWidget {
-  const _DogTile({required this.dog});
+  const _DogTile({required this.dog, required this.onEdit});
   final Dog dog;
+  final VoidCallback onEdit;
 
   @override
   Widget build(BuildContext context) => Card(
@@ -348,11 +438,10 @@ class _DogTile extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 10),
-          Icon(
-            dog.hasLocation
-                ? Icons.location_on_rounded
-                : Icons.location_off_outlined,
-            color: dog.hasLocation ? const Color(0xff1c6b5a) : Colors.black26,
+          IconButton(
+            onPressed: onEdit,
+            icon: const Icon(Icons.edit_outlined),
+            tooltip: 'Edit record',
           ),
         ],
       ),
@@ -586,7 +675,9 @@ class _EmptyState extends StatelessWidget {
 }
 
 class _AddDogDialog extends StatefulWidget {
-  const _AddDogDialog();
+  const _AddDogDialog({this.dog});
+
+  final Dog? dog;
 
   @override
   State<_AddDogDialog> createState() => _AddDogDialogState();
@@ -595,6 +686,7 @@ class _AddDogDialog extends StatefulWidget {
 class _AddDogDialogState extends State<_AddDogDialog> {
   final _formKey = GlobalKey<FormState>();
   String _animalCategory = 'dog';
+  int _page = 0;
   final _name = TextEditingController();
   final _breed = TextEditingController();
   String _gender = '';
@@ -609,11 +701,35 @@ class _AddDogDialogState extends State<_AddDogDialog> {
   bool _gettingLocation = false;
   double? _latitude;
   double? _longitude;
+  SterilizationStatus _sterilization = SterilizationStatus.no;
+  bool _vaccinated = false;
+  bool _rabies = false;
+  bool _nineInOne = false;
+  DateTime? _vaccinationDate;
 
   @override
   void initState() {
     super.initState();
-    _breed.text = 'Indie';
+    final dog = widget.dog;
+    if (dog == null) {
+      _breed.text = 'Indie';
+      return;
+    }
+    _animalCategory = dog.animalCategory;
+    _name.text = dog.name;
+    _breed.text = dog.breed;
+    _gender = dog.gender;
+    _age.text = dog.age;
+    _identifyingMarks.text = dog.color;
+    _notes.text = dog.notes;
+    _address.text = dog.address;
+    _area.text = dog.area;
+    _photoUrl = dog.photoPath;
+    _latitude = dog.latitude;
+    _longitude = dog.longitude;
+    _sterilization = dog.sterilization == SterilizationStatus.unknown
+        ? SterilizationStatus.no
+        : dog.sterilization;
   }
 
   @override
@@ -681,30 +797,63 @@ class _AddDogDialogState extends State<_AddDogDialog> {
     }
   }
 
-  void _save() {
+  void _continueToHealth() {
     if (!_formKey.currentState!.validate()) return;
+    setState(() => _page = 1);
+  }
+
+  Future<void> _selectVaccinationDate() async {
+    final date = await showDatePicker(
+      context: context,
+      initialDate: _vaccinationDate ?? DateTime.now(),
+      firstDate: DateTime(2000),
+      lastDate: DateTime.now(),
+    );
+    if (date != null && mounted) setState(() => _vaccinationDate = date);
+  }
+
+  void _save() {
+    if (_vaccinated && (!_rabies && !_nineInOne || _vaccinationDate == null)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Choose a vaccine and its vaccination date.'),
+        ),
+      );
+      return;
+    }
     final now = DateTime.now();
-    final recordId = DogRepository.newId();
+    final recordId = widget.dog?.id ?? DogRepository.newId();
     Navigator.pop(
       context,
-      Dog(
-        id: recordId,
-        animalCategory: _animalCategory,
-        name: _name.text.trim(),
-        breed: _breed.text.trim(),
-        photoBytes: _photoBytes,
-        photoPath: _photoUrl,
-        gender: _gender,
-        age: _age.text.trim(),
-        color: _identifyingMarks.text.trim(),
-        notes: _notes.text.trim(),
-        address: _address.text.trim(),
-        locationNote: _address.text.trim(),
-        area: _area.text.trim(),
-        latitude: _latitude,
-        longitude: _longitude,
-        createdAt: now,
-        updatedAt: now,
+      _DogRecordDraft(
+        dog: Dog(
+          id: recordId,
+          animalCategory: _animalCategory,
+          name: _name.text.trim(),
+          breed: _breed.text.trim(),
+          photoBytes: _photoBytes,
+          photoPath: _photoUrl,
+          gender: _gender,
+          age: _age.text.trim(),
+          color: _identifyingMarks.text.trim(),
+          sterilization: _sterilization,
+          notes: _notes.text.trim(),
+          address: _address.text.trim(),
+          locationNote: _address.text.trim(),
+          area: _area.text.trim(),
+          latitude: _latitude,
+          longitude: _longitude,
+          createdAt: widget.dog?.createdAt ?? now,
+          updatedAt: now,
+        ),
+        healthDetails: DogHealthDetails(
+          dogId: recordId,
+          sterilization: _sterilization,
+          vaccinated: _vaccinated,
+          rabies: _rabies,
+          nineInOne: _nineInOne,
+          vaccinationDate: _vaccinationDate,
+        ),
       ),
     );
   }
@@ -713,196 +862,330 @@ class _AddDogDialogState extends State<_AddDogDialog> {
   Widget build(BuildContext context) {
     final dialogHeight = MediaQuery.sizeOf(context).height * 0.7;
     return AlertDialog(
-      title: const Text('Record a stray dog'),
+      title: Text(_page == 0 ? 'Record a stray dog' : 'Health details'),
       content: SizedBox(
         width: 320,
         height: dialogHeight,
         child: Form(
           key: _formKey,
           child: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                DropdownButtonFormField<String>(
-                  initialValue: _animalCategory,
-                  decoration: const InputDecoration(
-                    labelText: 'Animal category',
-                  ),
-                  items: const [
-                    DropdownMenuItem(value: 'dog', child: Text('Dog')),
-                    DropdownMenuItem(value: 'cat', child: Text('Cat')),
-                  ],
-                  onChanged: (value) {
-                    if (value != null) setState(() => _animalCategory = value);
-                  },
-                ),
-                TextFormField(
-                  controller: _name,
-                  autofocus: true,
-                  decoration: const InputDecoration(
-                    labelText: 'Name',
-                    hintText: 'Furry friend\'s name',
-                  ),
-                ),
-                const SizedBox(height: 8),
-                TextFormField(
-                  controller: _breed,
-                  decoration: const InputDecoration(labelText: 'Breed'),
-                ),
-                const SizedBox(height: 8),
-                if (_photoBytes != null)
-                  Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 10),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(8),
-                      child: Image.memory(
-                        _photoBytes!,
-                        height: 140,
-                        width: 320,
-                        fit: BoxFit.cover,
+            child: _page == 0
+                ? Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      DropdownButtonFormField<String>(
+                        initialValue: _animalCategory,
+                        decoration: const InputDecoration(
+                          labelText: 'Animal category',
+                        ),
+                        items: const [
+                          DropdownMenuItem(value: 'dog', child: Text('Dog')),
+                          DropdownMenuItem(value: 'cat', child: Text('Cat')),
+                        ],
+                        onChanged: (value) {
+                          if (value != null) {
+                            setState(() => _animalCategory = value);
+                          }
+                        },
                       ),
-                    ),
-                  ),
-                if (_photoBytes != null) const SizedBox(height: 8),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Photo',
-                      style: TextStyle(fontWeight: FontWeight.w500),
-                    ),
-                    const SizedBox(height: 8),
-                    Row(
-                      children: [
-                        SizedBox(
-                          width: 145,
-                          child: OutlinedButton.icon(
-                            onPressed: () => _pickPhoto(ImageSource.camera),
-                            icon: const Icon(Icons.camera_alt_outlined),
-                            label: const Text('Take photo'),
+                      TextFormField(
+                        controller: _name,
+                        autofocus: true,
+                        decoration: const InputDecoration(
+                          labelText: 'Name',
+                          hintText: 'Furry friend\'s name',
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      TextFormField(
+                        controller: _breed,
+                        decoration: const InputDecoration(labelText: 'Breed'),
+                      ),
+                      const SizedBox(height: 8),
+                      if (_photoBytes != null)
+                        Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 10),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(8),
+                            child: Image.memory(
+                              _photoBytes!,
+                              height: 140,
+                              width: 320,
+                              fit: BoxFit.cover,
+                            ),
                           ),
                         ),
-                        const SizedBox(width: 8),
-                        SizedBox(
-                          width: 145,
-                          child: OutlinedButton.icon(
-                            onPressed: () => _pickPhoto(ImageSource.gallery),
-                            icon: const Icon(Icons.photo_library_outlined),
-                            label: const Text('Browse photos'),
+                      if (_photoBytes != null) const SizedBox(height: 8),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Photo',
+                            style: TextStyle(fontWeight: FontWeight.w500),
                           ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                if (_photoName != null)
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: Padding(
-                      padding: const EdgeInsets.only(bottom: 8),
-                      child: Text(
-                        _photoName!,
-                        style: Theme.of(context).textTheme.bodySmall,
-                      ),
-                    ),
-                  ),
-                DropdownButtonFormField<String>(
-                  initialValue: _gender.isEmpty ? null : _gender,
-                  decoration: const InputDecoration(labelText: 'Gender'),
-                  items: const [
-                    DropdownMenuItem(value: 'Male', child: Text('Male')),
-                    DropdownMenuItem(value: 'Female', child: Text('Female')),
-                    DropdownMenuItem(
-                      value: 'Male Pup',
-                      child: Text('Male Pup'),
-                    ),
-                    DropdownMenuItem(
-                      value: 'Female Pup',
-                      child: Text('Female Pup'),
-                    ),
-                  ],
-                  onChanged: (value) {
-                    setState(() {
-                      _gender = value ?? '';
-                    });
-                  },
-                ),
-                const SizedBox(height: 8),
-                TextFormField(
-                  controller: _age,
-                  keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(labelText: 'Age'),
-                  validator: (value) =>
-                      value != null &&
-                          value.trim().isNotEmpty &&
-                          int.tryParse(value.trim()) == null
-                      ? 'Age must be a whole number'
-                      : null,
-                ),
-                const SizedBox(height: 8),
-                TextFormField(
-                  controller: _identifyingMarks,
-                  maxLines: 2,
-                  decoration: const InputDecoration(
-                    labelText: 'Color / Identifying marks',
-                  ),
-                ),
-                const SizedBox(height: 8),
-                TextFormField(
-                  controller: _notes,
-                  maxLines: 2,
-                  decoration: const InputDecoration(labelText: 'Notes'),
-                ),
-                const SizedBox(height: 8),
-                TextFormField(
-                  controller: _address,
-                  decoration: const InputDecoration(
-                    labelText: 'Address',
-                    suffixIcon: Icon(Icons.location_on_outlined),
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    Expanded(
-                      child: TextButton.icon(
-                        onPressed: _gettingLocation
-                            ? null
-                            : _useCurrentLocation,
-                        icon: _gettingLocation
-                            ? const SizedBox(
-                                width: 16,
-                                height: 16,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
+                          const SizedBox(height: 8),
+                          Row(
+                            children: [
+                              SizedBox(
+                                width: 145,
+                                child: OutlinedButton.icon(
+                                  onPressed: () =>
+                                      _pickPhoto(ImageSource.camera),
+                                  icon: const Icon(Icons.camera_alt_outlined),
+                                  label: const Text('Take photo'),
                                 ),
-                              )
-                            : const Icon(Icons.my_location),
-                        label: const Text('Use current location'),
+                              ),
+                              const SizedBox(width: 8),
+                              SizedBox(
+                                width: 145,
+                                child: OutlinedButton.icon(
+                                  onPressed: () =>
+                                      _pickPhoto(ImageSource.gallery),
+                                  icon: const Icon(
+                                    Icons.photo_library_outlined,
+                                  ),
+                                  label: const Text('Browse photos'),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
                       ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                TextFormField(
-                  controller: _area,
-                  decoration: const InputDecoration(
-                    labelText: 'Building / Area',
+                      const SizedBox(height: 8),
+                      if (_photoName != null)
+                        Align(
+                          alignment: Alignment.centerLeft,
+                          child: Padding(
+                            padding: const EdgeInsets.only(bottom: 8),
+                            child: Text(
+                              _photoName!,
+                              style: Theme.of(context).textTheme.bodySmall,
+                            ),
+                          ),
+                        ),
+                      DropdownButtonFormField<String>(
+                        initialValue: _gender.isEmpty ? null : _gender,
+                        decoration: const InputDecoration(labelText: 'Gender'),
+                        items: const [
+                          DropdownMenuItem(value: 'Male', child: Text('Male')),
+                          DropdownMenuItem(
+                            value: 'Female',
+                            child: Text('Female'),
+                          ),
+                          DropdownMenuItem(
+                            value: 'Male Pup',
+                            child: Text('Male Pup'),
+                          ),
+                          DropdownMenuItem(
+                            value: 'Female Pup',
+                            child: Text('Female Pup'),
+                          ),
+                        ],
+                        onChanged: (value) {
+                          setState(() {
+                            _gender = value ?? '';
+                          });
+                        },
+                      ),
+                      const SizedBox(height: 8),
+                      TextFormField(
+                        controller: _age,
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(labelText: 'Age'),
+                        validator: (value) =>
+                            value != null &&
+                                value.trim().isNotEmpty &&
+                                int.tryParse(value.trim()) == null
+                            ? 'Age must be a whole number'
+                            : null,
+                      ),
+                      const SizedBox(height: 8),
+                      TextFormField(
+                        controller: _identifyingMarks,
+                        maxLines: 2,
+                        decoration: const InputDecoration(
+                          labelText: 'Color / Identifying marks',
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      TextFormField(
+                        controller: _notes,
+                        maxLines: 2,
+                        decoration: const InputDecoration(labelText: 'Notes'),
+                      ),
+                      const SizedBox(height: 8),
+                      TextFormField(
+                        controller: _address,
+                        decoration: const InputDecoration(
+                          labelText: 'Address',
+                          suffixIcon: Icon(Icons.location_on_outlined),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: TextButton.icon(
+                              onPressed: _gettingLocation
+                                  ? null
+                                  : _useCurrentLocation,
+                              icon: _gettingLocation
+                                  ? const SizedBox(
+                                      width: 16,
+                                      height: 16,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                      ),
+                                    )
+                                  : const Icon(Icons.my_location),
+                              label: const Text('Use current location'),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      TextFormField(
+                        controller: _area,
+                        decoration: const InputDecoration(
+                          labelText: 'Building / Area',
+                        ),
+                      ),
+                    ],
+                  )
+                : _HealthDetailsPage(
+                    sterilization: _sterilization,
+                    vaccinated: _vaccinated,
+                    rabies: _rabies,
+                    nineInOne: _nineInOne,
+                    vaccinationDate: _vaccinationDate,
+                    onSterilizationChanged: (status) {
+                      setState(() => _sterilization = status);
+                    },
+                    onVaccinatedChanged: (value) {
+                      setState(() {
+                        _vaccinated = value;
+                        if (!value) {
+                          _rabies = false;
+                          _nineInOne = false;
+                          _vaccinationDate = null;
+                        }
+                      });
+                    },
+                    onRabiesChanged: (value) {
+                      setState(() => _rabies = value);
+                    },
+                    onNineInOneChanged: (value) {
+                      setState(() => _nineInOne = value);
+                    },
+                    onSelectDate: _selectVaccinationDate,
                   ),
-                ),
-              ],
-            ),
           ),
         ),
       ),
       actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: const Text('Cancel'),
+        if (_page == 0)
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          )
+        else
+          TextButton(
+            onPressed: () => setState(() => _page = 0),
+            child: const Text('Back'),
+          ),
+        FilledButton(
+          onPressed: _page == 0 ? _continueToHealth : _save,
+          child: Text(_page == 0 ? 'Continue' : 'Save record'),
         ),
-        FilledButton(onPressed: _save, child: const Text('Save record')),
       ],
     );
   }
+}
+
+class _DogRecordDraft {
+  const _DogRecordDraft({required this.dog, required this.healthDetails});
+
+  final Dog dog;
+  final DogHealthDetails healthDetails;
+}
+
+class _HealthDetailsPage extends StatelessWidget {
+  const _HealthDetailsPage({
+    required this.sterilization,
+    required this.vaccinated,
+    required this.rabies,
+    required this.nineInOne,
+    required this.vaccinationDate,
+    required this.onSterilizationChanged,
+    required this.onVaccinatedChanged,
+    required this.onRabiesChanged,
+    required this.onNineInOneChanged,
+    required this.onSelectDate,
+  });
+
+  final SterilizationStatus sterilization;
+  final bool vaccinated;
+  final bool rabies;
+  final bool nineInOne;
+  final DateTime? vaccinationDate;
+  final ValueChanged<SterilizationStatus> onSterilizationChanged;
+  final ValueChanged<bool> onVaccinatedChanged;
+  final ValueChanged<bool> onRabiesChanged;
+  final ValueChanged<bool> onNineInOneChanged;
+  final VoidCallback onSelectDate;
+
+  @override
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      const Text('Sterilized', style: TextStyle(fontWeight: FontWeight.w600)),
+      RadioGroup<SterilizationStatus>(
+        groupValue: sterilization,
+        onChanged: (status) {
+          if (status != null) onSterilizationChanged(status);
+        },
+        child: const Column(
+          children: [
+            RadioListTile(value: SterilizationStatus.yes, title: Text('Yes')),
+            RadioListTile(value: SterilizationStatus.no, title: Text('No')),
+          ],
+        ),
+      ),
+      const SizedBox(height: 12),
+      SwitchListTile(
+        contentPadding: EdgeInsets.zero,
+        title: const Text(
+          'Vaccinated',
+          style: TextStyle(fontWeight: FontWeight.w600),
+        ),
+        value: vaccinated,
+        onChanged: onVaccinatedChanged,
+      ),
+      if (vaccinated) ...[
+        CheckboxListTile(
+          contentPadding: EdgeInsets.zero,
+          title: const Text('Rabies'),
+          value: rabies,
+          onChanged: (value) => onRabiesChanged(value ?? false),
+        ),
+        CheckboxListTile(
+          contentPadding: EdgeInsets.zero,
+          title: const Text('9-in-1'),
+          value: nineInOne,
+          onChanged: (value) => onNineInOneChanged(value ?? false),
+        ),
+        const SizedBox(height: 8),
+        OutlinedButton.icon(
+          onPressed: onSelectDate,
+          icon: const Icon(Icons.calendar_today_outlined),
+          label: Text(
+            vaccinationDate == null
+                ? 'Vaccination date'
+                : MaterialLocalizations.of(context)
+                      .formatMediumDate(vaccinationDate!),
+          ),
+        ),
+      ],
+    ],
+  );
 }

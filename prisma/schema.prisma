@@ -28,9 +28,24 @@ model PrimaryDogDetails {
   addedBy          String?  @map("added_by")
   updatedDate      DateTime @default(now()) @map("updated_date")
   updatedBy        String?  @map("updated_by")
+  healthDetails    SterilizationVaccinationDetails?
 
   @@index([area], map: "primary_dog_details_area_idx")
   @@index([updatedDate(sort: Desc)], map: "primary_dog_details_updated_date_idx")
   @@map("primary_dog_details")
+  @@schema("treatfeedtails")
+}
+
+model SterilizationVaccinationDetails {
+  id                  String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  dogId               String   @unique @map("dog_id") @db.Uuid
+  sterilizationStatus String   @map("sterilization_status")
+  vaccinated          Boolean  @default(false)
+  rabies              Boolean  @default(false)
+  nineInOne           Boolean  @default(false) @map("nine_in_one")
+  vaccinationDate     DateTime? @map("vaccination_date")
+  dog                 PrimaryDogDetails @relation(fields: [dogId], references: [id], onDelete: Cascade)
+
+  @@map("sterilization_vaccination_details")
   @@schema("treatfeedtails")
 }

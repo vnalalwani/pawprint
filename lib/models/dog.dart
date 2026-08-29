@@ -15,6 +15,9 @@ class Dog {
     this.age = '',
     this.color = '',
     this.sterilization = SterilizationStatus.unknown,
+    this.vaccinated = false,
+    this.rabiesVaccinated = false,
+    this.nineInOneVaccinated = false,
     this.sterilizedOn,
     this.medicalIssues = '',
     this.photoKey,
@@ -39,6 +42,9 @@ class Dog {
   final String age;
   final String color;
   final SterilizationStatus sterilization;
+  final bool vaccinated;
+  final bool rabiesVaccinated;
+  final bool nineInOneVaccinated;
   final DateTime? sterilizedOn;
   final String medicalIssues;
   final String? photoKey;
@@ -59,6 +65,9 @@ class Dog {
     String? identification,
     String? age,
     SterilizationStatus? sterilization,
+    bool? vaccinated,
+    bool? rabiesVaccinated,
+    bool? nineInOneVaccinated,
     DateTime? sterilizedOn,
     bool clearSterilizedOn = false,
     String? medicalIssues,
@@ -85,6 +94,9 @@ class Dog {
       identification: identification ?? this.identification,
       age: age ?? this.age,
       sterilization: sterilization ?? this.sterilization,
+      vaccinated: vaccinated ?? this.vaccinated,
+      rabiesVaccinated: rabiesVaccinated ?? this.rabiesVaccinated,
+      nineInOneVaccinated: nineInOneVaccinated ?? this.nineInOneVaccinated,
       sterilizedOn: clearSterilizedOn
           ? null
           : (sterilizedOn ?? this.sterilizedOn),
@@ -113,6 +125,9 @@ class Dog {
     'identification': identification,
     'age': age,
     'sterilization': sterilization.name,
+    'vaccinated': vaccinated,
+    'rabiesVaccinated': rabiesVaccinated,
+    'nineInOneVaccinated': nineInOneVaccinated,
     'sterilizedOn': sterilizedOn?.toIso8601String(),
     'medicalIssues': medicalIssues,
     'photoKey': photoKey,
@@ -141,6 +156,9 @@ class Dog {
         (value) => value.name == map['sterilization'],
         orElse: () => SterilizationStatus.unknown,
       ),
+      vaccinated: (map['vaccinated'] as bool?) ?? false,
+      rabiesVaccinated: (map['rabiesVaccinated'] as bool?) ?? false,
+      nineInOneVaccinated: (map['nineInOneVaccinated'] as bool?) ?? false,
       sterilizedOn: map['sterilizedOn'] == null
           ? null
           : DateTime.parse(map['sterilizedOn']! as String),

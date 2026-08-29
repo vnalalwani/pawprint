@@ -18,5 +18,12 @@ void main() {
     expect(find.text('Breed'), findsOneWidget);
     expect(find.text('Color / Identifying marks'), findsOneWidget);
     expect(find.text('Tag ID'), findsNothing);
+
+    await tester.tap(find.text('Continue'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Health details'), findsOneWidget);
+    expect(find.text('Sterilized'), findsOneWidget);
+    expect(find.text('Vaccinated'), findsOneWidget);
   });
 }

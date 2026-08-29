@@ -5,7 +5,7 @@ import 'package:uuid/uuid.dart';
 
 import '../config/supabase_config.dart';
 import '../models/dog.dart';
-import '../models/vaccination.dart';
+import '../models/dog_health_details.dart';
 
 class DogRepository {
   DogRepository._();
@@ -25,16 +25,30 @@ class DogRepository {
 
   Future<List<Dog>> allDogs() async {
     _requireConnection();
-    final rows = await _client
-        .from('primary_dog_details')
-        .select()
-        .order('updated_date', ascending: false);
+    late final List<Map<String, dynamic>> rows;
+    try {
+      rows = await _client
+          .from('primary_dog_details')
+          .select(
+            '*, sterilization_vaccination_details(sterilization_status, vaccinated, rabies, nine_in_one)',
+          )
+          .order('updated_date', ascending: false);
+    } on PostgrestException {
+      rows = await _client
+          .from('primary_dog_details')
+          .select()
+          .order('updated_date', ascending: false);
+    }
     return Future.wait(rows.map(_dogFromSupabase));
   }
 
   Future<Dog> _dogFromSupabase(Map<String, dynamic> row) async {
     final storedPhotoPath = row['photo_path'] as String?;
     final photoPath = await _photoUrl(storedPhotoPath);
+    final healthRows = row['sterilization_vaccination_details'];
+    final health = healthRows is List && healthRows.isNotEmpty
+        ? healthRows.first as Map<String, dynamic>
+        : null;
     final createdDate = DateTime.parse(row['created_date'] as String);
     final updatedDate = DateTime.parse(row['updated_date'] as String);
     return Dog(
@@ -48,6 +62,13 @@ class DogRepository {
           : null,
       gender: (row['gender'] as String?) ?? '',
       age: row['age']?.toString() ?? '',
+      sterilization: SterilizationStatus.values.firstWhere(
+        (status) => status.name == health?['sterilization_status'],
+        orElse: () => SterilizationStatus.unknown,
+      ),
+      vaccinated: (health?['vaccinated'] as bool?) ?? false,
+      rabiesVaccinated: (health?['rabies'] as bool?) ?? false,
+      nineInOneVaccinated: (health?['nine_in_one'] as bool?) ?? false,
       color:
           (row['color'] as String?) ??
           (row['identifying_marks'] as String?) ??
@@ -79,11 +100,22 @@ class DogRepository {
 
   Future<Dog?> dogById(String id) async {
     _requireConnection();
-    final row = await _client
-        .from('primary_dog_details')
-        .select()
-        .eq('id', id)
-        .maybeSingle();
+    Map<String, dynamic>? row;
+    try {
+      row = await _client
+          .from('primary_dog_details')
+          .select(
+            '*, sterilization_vaccination_details(sterilization_status, vaccinated, rabies, nine_in_one)',
+          )
+          .eq('id', id)
+          .maybeSingle();
+    } on PostgrestException {
+      row = await _client
+          .from('primary_dog_details')
+          .select()
+          .eq('id', id)
+          .maybeSingle();
+    }
     return row == null ? null : await _dogFromSupabase(row);
   }
 
@@ -143,43 +175,16 @@ class DogRepository {
     await _client.storage.from(_photoBucket).remove(['images/$id.jpg']);
   }
 
-  Future<List<Vaccination>> vaccinationsFor(String dogId) async {
+  Future<void> saveHealthDetails(DogHealthDetails details) async {
     _requireConnection();
-    final rows = await _client
-        .from('vaccinations')
-        .select()
-        .eq('dog_id', dogId)
-        .order('date_given', ascending: false);
-    return rows
-        .map(
-          (row) => Vaccination.fromMap({
-            'id': row['id'],
-            'dogId': row['dog_id'],
-            'name': row['name'],
-            'dateGiven': row['date_given'],
-            'nextDue': row['next_due'],
-            'notes': row['notes'],
-          }),
-        )
-        .toList();
-  }
-
-  Future<Vaccination> saveVaccination(Vaccination shot) async {
-    _requireConnection();
-    await _client.from('vaccinations').upsert({
-      'id': shot.id,
-      'dog_id': shot.dogId,
-      'name': shot.name,
-      'date_given': shot.dateGiven.toIso8601String(),
-      'next_due': shot.nextDue?.toIso8601String(),
-      'notes': shot.notes,
-    }, onConflict: 'id');
-    return shot;
-  }
-
-  Future<void> deleteVaccination(String id) async {
-    _requireConnection();
-    await _client.from('vaccinations').delete().eq('id', id);
+    await _client.from('sterilization_vaccination_details').upsert({
+      'dog_id': details.dogId,
+      'sterilization_status': details.sterilization.name,
+      'vaccinated': details.vaccinated,
+      'rabies': details.rabies,
+      'nine_in_one': details.nineInOne,
+      'vaccination_date': details.vaccinationDate?.toIso8601String(),
+    }, onConflict: 'dog_id');
   }
 
   Future<String> savePhotoBytes(Uint8List bytes) async {
