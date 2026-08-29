@@ -7,14 +7,13 @@ class Dog {
     required this.id,
     required this.name,
     required this.breed,
-    required this.identification,
+    this.identification = '',
     this.animalCategory = 'dog',
     this.photoPath,
     this.photoBytes,
     this.gender = '',
     this.age = '',
     this.color = '',
-    this.identifyingMarks = '',
     this.sterilization = SterilizationStatus.unknown,
     this.sterilizedOn,
     this.medicalIssues = '',
@@ -39,7 +38,6 @@ class Dog {
   final String gender;
   final String age;
   final String color;
-  final String identifyingMarks;
   final SterilizationStatus sterilization;
   final DateTime? sterilizedOn;
   final String medicalIssues;
@@ -77,7 +75,6 @@ class Dog {
     Uint8List? photoBytes,
     String? gender,
     String? color,
-    String? identifyingMarks,
     String? address,
     String? area,
   }) {
@@ -102,7 +99,6 @@ class Dog {
       photoBytes: photoBytes ?? this.photoBytes,
       gender: gender ?? this.gender,
       color: color ?? this.color,
-      identifyingMarks: identifyingMarks ?? this.identifyingMarks,
       address: address ?? this.address,
       area: area ?? this.area,
       createdAt: createdAt,
@@ -130,7 +126,6 @@ class Dog {
     'photoPath': photoPath,
     'gender': gender,
     'color': color,
-    'identifyingMarks': identifyingMarks,
     'address': address,
     'area': area,
   };
@@ -161,7 +156,6 @@ class Dog {
       photoPath: map['photoPath'] as String?,
       gender: (map['gender'] as String?) ?? '',
       color: (map['color'] as String?) ?? '',
-      identifyingMarks: (map['identifyingMarks'] as String?) ?? '',
       address: (map['address'] as String?) ?? '',
       area: (map['area'] as String?) ?? '',
     );

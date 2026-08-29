@@ -48,14 +48,18 @@ class DogRepository {
           : null,
       gender: (row['gender'] as String?) ?? '',
       age: row['age']?.toString() ?? '',
-      color: (row['color'] as String?) ?? '',
+      color:
+          (row['color'] as String?) ??
+          (row['identifying_marks'] as String?) ??
+          '',
       breed: (row['breed'] as String?) ?? '',
-      identifyingMarks: (row['identifying_marks'] as String?) ?? '',
       medicalIssues: (row['identifying_marks'] as String?) ?? '',
       notes: (row['notes'] as String?) ?? '',
       address: (row['address'] as String?) ?? '',
       locationNote: (row['address'] as String?) ?? '',
       area: (row['area'] as String?) ?? '',
+      latitude: (row['latitude'] as num?)?.toDouble(),
+      longitude: (row['longitude'] as num?)?.toDouble(),
       createdAt: createdDate,
       updatedAt: updatedDate,
     );
@@ -94,17 +98,19 @@ class DogRepository {
       'age': int.tryParse(dog.age),
       'color': dog.color,
       'breed': dog.breed,
-      'identifying_marks': dog.identifyingMarks.isEmpty
-          ? dog.medicalIssues
-          : dog.identifyingMarks,
       'notes': dog.notes,
       'address': dog.address.isEmpty ? dog.locationNote : dog.address,
       'area': dog.area,
+      'latitude': dog.latitude,
+      'longitude': dog.longitude,
       'created_date': dog.createdAt.toIso8601String(),
       'updated_date': dog.updatedAt.toIso8601String(),
     };
-    if (dog.identification.isNotEmpty) record['tag_id'] = dog.identification;
-    await _client.from('primary_dog_details').upsert(record, onConflict: 'id');
+    final savedRecord = await _client
+        .from('primary_dog_details')
+        .upsert(record, onConflict: 'id')
+        .select('tag_id')
+        .single();
 
     var photoPath = dog.photoPath;
     if (dog.photoBytes != null) {
@@ -124,7 +130,11 @@ class DogRepository {
       photoPath = await _photoUrl(photoPath);
     }
 
-    return dog.copyWith(photoPath: photoPath, photoBytes: null);
+    return dog.copyWith(
+      identification: (savedRecord['tag_id'] as String?) ?? '',
+      photoPath: photoPath,
+      photoBytes: null,
+    );
   }
 
   Future<void> deleteDog(String id) async {

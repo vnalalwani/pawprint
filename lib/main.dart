@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import 'config/supabase_config.dart';
 
@@ -415,18 +416,58 @@ class _DogDetailsPage extends StatelessWidget {
           _DetailSection(
             title: 'Primary details',
             values: [
-              _DetailValue('Tag ID', _display(dog.identification)),
               _DetailValue('Animal category', dog.animalCategory),
               _DetailValue('Gender', _display(dog.gender)),
               _DetailValue('Age', _display(dog.age)),
-              _DetailValue('Color', _display(dog.color)),
               _DetailValue('Breed', _display(dog.breed)),
-              _DetailValue('Identifying marks', _display(dog.identifyingMarks)),
+              _DetailValue('Color / Identifying marks', _display(dog.color)),
               _DetailValue('Notes', _display(dog.notes)),
-              _DetailValue('Address', _display(dog.address)),
               _DetailValue('Area', _display(dog.area)),
             ],
           ),
+          if (dog.hasLocation)
+            Padding(
+              padding: const EdgeInsets.only(top: 16),
+              child: InkWell(
+                onTap: () => _openGoogleMaps(dog.latitude!, dog.longitude!),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Location',
+                      style: TextStyle(fontWeight: FontWeight.w500),
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Icon(
+                          Icons.location_on_rounded,
+                          color: Theme.of(context).colorScheme.primary,
+                          size: 20,
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            _display(dog.address),
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w600,
+                              color: Colors.blue,
+                              decoration: TextDecoration.underline,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Tap to open in Google Maps',
+                      style: Theme.of(context).textTheme.bodySmall
+                          ?.copyWith(color: Colors.grey),
+                    ),
+                  ],
+                ),
+              ),
+            ),
           const SizedBox(height: 16),
           _DetailSection(
             title: 'Record information',
@@ -454,6 +495,17 @@ class _DogDetailsPage extends StatelessWidget {
       value == null || value.trim().isEmpty ? 'Not provided' : value;
 
   String _formatDate(DateTime value) => value.toLocal().toString();
+
+  Future<void> _openGoogleMaps(double latitude, double longitude) async {
+    final googleMapsUrl =
+        'https://www.google.com/maps/search/?api=1&query=$latitude,$longitude';
+    if (await canLaunchUrl(Uri.parse(googleMapsUrl))) {
+      await launchUrl(
+        Uri.parse(googleMapsUrl),
+        mode: LaunchMode.externalApplication,
+      );
+    }
+  }
 }
 
 class _DetailValue {
@@ -473,11 +525,7 @@ class _DetailSection extends StatelessWidget {
   Widget build(BuildContext context) => Column(
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
-      Text(
-        title,
-        style: Theme.of(context).textTheme.titleMedium
-            ?.copyWith(fontWeight: FontWeight.w800),
-      ),
+      Text(title, style: const TextStyle(fontWeight: FontWeight.w500)),
       const SizedBox(height: 8),
       ...values.map(
         (item) => Padding(
@@ -549,28 +597,30 @@ class _AddDogDialogState extends State<_AddDogDialog> {
   String _animalCategory = 'dog';
   final _name = TextEditingController();
   final _breed = TextEditingController();
-  final _id = TextEditingController();
-  final _gender = TextEditingController();
+  String _gender = '';
   final _age = TextEditingController();
-  final _color = TextEditingController();
   final _identifyingMarks = TextEditingController();
   final _notes = TextEditingController();
   final _address = TextEditingController();
   final _area = TextEditingController();
   Uint8List? _photoBytes;
   String? _photoName;
+  String? _photoUrl;
   bool _gettingLocation = false;
   double? _latitude;
   double? _longitude;
 
   @override
+  void initState() {
+    super.initState();
+    _breed.text = 'Indie';
+  }
+
+  @override
   void dispose() {
     _name.dispose();
     _breed.dispose();
-    _id.dispose();
-    _gender.dispose();
     _age.dispose();
-    _color.dispose();
     _identifyingMarks.dispose();
     _notes.dispose();
     _address.dispose();
@@ -587,6 +637,7 @@ class _AddDogDialogState extends State<_AddDogDialog> {
       setState(() {
         _photoBytes = bytes;
         _photoName = file.name;
+        _photoUrl = null;
       });
     } catch (error) {
       if (!mounted) return;
@@ -633,20 +684,19 @@ class _AddDogDialogState extends State<_AddDogDialog> {
   void _save() {
     if (!_formKey.currentState!.validate()) return;
     final now = DateTime.now();
+    final recordId = DogRepository.newId();
     Navigator.pop(
       context,
       Dog(
-        id: DogRepository.newId(),
+        id: recordId,
         animalCategory: _animalCategory,
         name: _name.text.trim(),
         breed: _breed.text.trim(),
-        identification: _id.text.trim(),
         photoBytes: _photoBytes,
-        gender: _gender.text.trim(),
+        photoPath: _photoUrl,
+        gender: _gender,
         age: _age.text.trim(),
-        color: _color.text.trim(),
-        identifyingMarks: _identifyingMarks.text.trim(),
-        medicalIssues: _identifyingMarks.text.trim(),
+        color: _identifyingMarks.text.trim(),
         notes: _notes.text.trim(),
         address: _address.text.trim(),
         locationNote: _address.text.trim(),
@@ -691,21 +741,15 @@ class _AddDogDialogState extends State<_AddDogDialog> {
                   autofocus: true,
                   decoration: const InputDecoration(
                     labelText: 'Name',
-                    hintText: 'A friendly name',
+                    hintText: 'Furry friend\'s name',
                   ),
                 ),
+                const SizedBox(height: 8),
                 TextFormField(
                   controller: _breed,
-                  decoration: const InputDecoration(
-                    labelText: 'Breed / description',
-                  ),
+                  decoration: const InputDecoration(labelText: 'Breed'),
                 ),
-                TextFormField(
-                  controller: _id,
-                  decoration: const InputDecoration(
-                    labelText: 'Tag or ID (optional)',
-                  ),
-                ),
+                const SizedBox(height: 8),
                 if (_photoBytes != null)
                   Padding(
                     padding: const EdgeInsets.symmetric(vertical: 10),
@@ -719,50 +763,76 @@ class _AddDogDialogState extends State<_AddDogDialog> {
                       ),
                     ),
                   ),
-                Row(
+                if (_photoBytes != null) const SizedBox(height: 8),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    SizedBox(
-                      width: 145,
-                      child: OutlinedButton.icon(
-                        onPressed: () => _pickPhoto(ImageSource.camera),
-                        icon: const Icon(Icons.camera_alt_outlined),
-                        label: const Text('Take photo'),
-                      ),
+                    const Text(
+                      'Photo',
+                      style: TextStyle(fontWeight: FontWeight.w500),
                     ),
-                    const SizedBox(width: 8),
-                    SizedBox(
-                      width: 145,
-                      child: OutlinedButton.icon(
-                        onPressed: () => _pickPhoto(ImageSource.gallery),
-                        icon: const Icon(Icons.photo_library_outlined),
-                        label: const Text('Browse photos'),
-                      ),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        SizedBox(
+                          width: 145,
+                          child: OutlinedButton.icon(
+                            onPressed: () => _pickPhoto(ImageSource.camera),
+                            icon: const Icon(Icons.camera_alt_outlined),
+                            label: const Text('Take photo'),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        SizedBox(
+                          width: 145,
+                          child: OutlinedButton.icon(
+                            onPressed: () => _pickPhoto(ImageSource.gallery),
+                            icon: const Icon(Icons.photo_library_outlined),
+                            label: const Text('Browse photos'),
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),
+                const SizedBox(height: 8),
                 if (_photoName != null)
                   Align(
                     alignment: Alignment.centerLeft,
                     child: Padding(
-                      padding: const EdgeInsets.only(top: 4),
+                      padding: const EdgeInsets.only(bottom: 8),
                       child: Text(
                         _photoName!,
                         style: Theme.of(context).textTheme.bodySmall,
                       ),
                     ),
                   ),
-                TextFormField(
-                  controller: _gender,
-                  decoration: const InputDecoration(
-                    labelText: 'Gender (optional)',
-                  ),
+                DropdownButtonFormField<String>(
+                  initialValue: _gender.isEmpty ? null : _gender,
+                  decoration: const InputDecoration(labelText: 'Gender'),
+                  items: const [
+                    DropdownMenuItem(value: 'Male', child: Text('Male')),
+                    DropdownMenuItem(value: 'Female', child: Text('Female')),
+                    DropdownMenuItem(
+                      value: 'Male Pup',
+                      child: Text('Male Pup'),
+                    ),
+                    DropdownMenuItem(
+                      value: 'Female Pup',
+                      child: Text('Female Pup'),
+                    ),
+                  ],
+                  onChanged: (value) {
+                    setState(() {
+                      _gender = value ?? '';
+                    });
+                  },
                 ),
+                const SizedBox(height: 8),
                 TextFormField(
                   controller: _age,
                   keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(
-                    labelText: 'Age (optional)',
-                  ),
+                  decoration: const InputDecoration(labelText: 'Age'),
                   validator: (value) =>
                       value != null &&
                           value.trim().isNotEmpty &&
@@ -770,51 +840,55 @@ class _AddDogDialogState extends State<_AddDogDialog> {
                       ? 'Age must be a whole number'
                       : null,
                 ),
-                TextFormField(
-                  controller: _color,
-                  decoration: const InputDecoration(
-                    labelText: 'Color (optional)',
-                  ),
-                ),
+                const SizedBox(height: 8),
                 TextFormField(
                   controller: _identifyingMarks,
                   maxLines: 2,
                   decoration: const InputDecoration(
-                    labelText: 'Identifying marks (optional)',
+                    labelText: 'Color / Identifying marks',
                   ),
                 ),
+                const SizedBox(height: 8),
                 TextFormField(
                   controller: _notes,
                   maxLines: 2,
-                  decoration: const InputDecoration(
-                    labelText: 'Notes (optional)',
-                  ),
+                  decoration: const InputDecoration(labelText: 'Notes'),
                 ),
+                const SizedBox(height: 8),
                 TextFormField(
                   controller: _address,
                   decoration: const InputDecoration(
-                    labelText: 'Address (optional)',
+                    labelText: 'Address',
                     suffixIcon: Icon(Icons.location_on_outlined),
                   ),
                 ),
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: TextButton.icon(
-                    onPressed: _gettingLocation ? null : _useCurrentLocation,
-                    icon: _gettingLocation
-                        ? const SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Icon(Icons.my_location),
-                    label: const Text('Use current location'),
-                  ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextButton.icon(
+                        onPressed: _gettingLocation
+                            ? null
+                            : _useCurrentLocation,
+                        icon: _gettingLocation
+                            ? const SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : const Icon(Icons.my_location),
+                        label: const Text('Use current location'),
+                      ),
+                    ),
+                  ],
                 ),
+                const SizedBox(height: 8),
                 TextFormField(
                   controller: _area,
                   decoration: const InputDecoration(
-                    labelText: 'Area (optional)',
+                    labelText: 'Building / Area',
                   ),
                 ),
               ],

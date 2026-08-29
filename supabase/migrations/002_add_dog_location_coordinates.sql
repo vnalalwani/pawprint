@@ -1,0 +1,3 @@
+ALTER TABLE treatfeedtails.primary_dog_details
+    ADD COLUMN IF NOT EXISTS latitude DOUBLE PRECISION,
+    ADD COLUMN IF NOT EXISTS longitude DOUBLE PRECISION;

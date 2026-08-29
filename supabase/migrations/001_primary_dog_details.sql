@@ -23,12 +23,22 @@ BEGIN
 END
 $$;
 
+CREATE SEQUENCE IF NOT EXISTS treatfeedtails.dog_tag_sequence
+    START WITH 1
+    INCREMENT BY 1;
+
 CREATE OR REPLACE FUNCTION treatfeedtails.generate_dog_tag_id()
 RETURNS TEXT
-LANGUAGE sql
+LANGUAGE plpgsql
 VOLATILE
 AS $$
-  SELECT 'DOG-' || upper(substr(replace(gen_random_uuid()::text, '-', ''), 1, 8));
+BEGIN
+    RETURN 'TFT-' || LPAD(
+        nextval('treatfeedtails.dog_tag_sequence')::TEXT,
+        6,
+        '0'
+    );
+END;
 $$;
 
 CREATE TABLE IF NOT EXISTS treatfeedtails.primary_dog_details (
@@ -52,6 +62,8 @@ CREATE TABLE IF NOT EXISTS treatfeedtails.primary_dog_details (
 
     address TEXT,
     area TEXT,
+    latitude DOUBLE PRECISION,
+    longitude DOUBLE PRECISION,
 
     created_date TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     added_by TEXT,
@@ -67,6 +79,8 @@ CREATE INDEX IF NOT EXISTS primary_dog_details_updated_date_idx
     ON treatfeedtails.primary_dog_details (updated_date DESC);
 
 GRANT USAGE ON SCHEMA treatfeedtails TO anon, authenticated;
+GRANT USAGE ON SEQUENCE treatfeedtails.dog_tag_sequence
+    TO anon, authenticated;
 GRANT SELECT, INSERT, UPDATE, DELETE
     ON treatfeedtails.primary_dog_details TO anon, authenticated;
 
