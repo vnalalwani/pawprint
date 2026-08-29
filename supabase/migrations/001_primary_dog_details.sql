@@ -33,7 +33,7 @@ LANGUAGE plpgsql
 VOLATILE
 AS $$
 BEGIN
-    RETURN 'TFT-' || LPAD(
+    RETURN 'TAG-' || LPAD(
         nextval('treatfeedtails.dog_tag_sequence')::TEXT,
         6,
         '0'
