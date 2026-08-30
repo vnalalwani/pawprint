@@ -51,6 +51,9 @@ class _HomePageState extends State<HomePage> {
   List<Dog> _dogs = [];
   bool _loading = true;
   String _query = '';
+  bool _filterSterilized = false;
+  bool _filterRabies = false;
+  bool _filterNineInOne = false;
 
   @override
   void initState() {
@@ -131,13 +134,72 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
+  Future<void> _showFilters() async {
+    var sterilized = _filterSterilized;
+    var rabies = _filterRabies;
+    var nineInOne = _filterNineInOne;
+    final applied = await showDialog<(bool, bool, bool)>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Filter records'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              CheckboxListTile(
+                value: sterilized,
+                onChanged: (value) =>
+                    setDialogState(() => sterilized = value ?? false),
+                title: const Text('Sterilized'),
+              ),
+              CheckboxListTile(
+                value: rabies,
+                onChanged: (value) =>
+                    setDialogState(() => rabies = value ?? false),
+                title: const Text('Rabies vaccinated'),
+              ),
+              CheckboxListTile(
+                value: nineInOne,
+                onChanged: (value) =>
+                    setDialogState(() => nineInOne = value ?? false),
+                title: const Text('9-in-1 vaccinated'),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, (false, false, false)),
+              child: const Text('Clear'),
+            ),
+            FilledButton(
+              onPressed: () =>
+                  Navigator.pop(context, (sterilized, rabies, nineInOne)),
+              child: const Text('Apply'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (applied == null || !mounted) return;
+    setState(() {
+      _filterSterilized = applied.$1;
+      _filterRabies = applied.$2;
+      _filterNineInOne = applied.$3;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final visibleDogs = _dogs.where((dog) {
-      final text = '${dog.name} ${dog.breed} ${dog.identification}'
-          .toLowerCase();
-      return text.contains(_query);
+      final text = '${dog.name} ${dog.area}'.toLowerCase();
+      return text.contains(_query) &&
+          (!_filterSterilized ||
+              dog.sterilization == SterilizationStatus.yes) &&
+          (!_filterRabies || dog.rabiesVaccinated) &&
+          (!_filterNineInOne || dog.nineInOneVaccinated);
     }).toList();
+    final hasActiveFilters =
+        _filterSterilized || _filterRabies || _filterNineInOne;
 
     return Scaffold(
       appBar: AppBar(
@@ -227,24 +289,39 @@ class _HomePageState extends State<HomePage> {
                         ?.copyWith(fontWeight: FontWeight.w800),
                   ),
                   const SizedBox(height: 12),
-                  TextField(
-                    controller: _searchController,
-                    decoration: InputDecoration(
-                      hintText: 'Search by name, breed or ID',
-                      prefixIcon: const Icon(Icons.search_rounded),
-                      suffixIcon: _query.isEmpty
-                          ? null
-                          : IconButton(
-                              onPressed: _searchController.clear,
-                              icon: const Icon(Icons.close_rounded),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: _searchController,
+                          decoration: InputDecoration(
+                            hintText: 'Search by name or area',
+                            prefixIcon: const Icon(Icons.search_rounded),
+                            suffixIcon: _query.isEmpty
+                                ? null
+                                : IconButton(
+                                    onPressed: _searchController.clear,
+                                    icon: const Icon(Icons.close_rounded),
+                                  ),
+                            filled: true,
+                            fillColor: Colors.white,
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(14),
+                              borderSide: BorderSide.none,
                             ),
-                      filled: true,
-                      fillColor: Colors.white,
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(14),
-                        borderSide: BorderSide.none,
+                          ),
+                        ),
                       ),
-                    ),
+                      const SizedBox(width: 8),
+                      Badge(
+                        isLabelVisible: hasActiveFilters,
+                        child: IconButton.filledTonal(
+                          onPressed: _showFilters,
+                          icon: const Icon(Icons.filter_list_rounded),
+                          tooltip: 'Filter records',
+                        ),
+                      ),
+                    ],
                   ),
                   const SizedBox(height: 14),
                   if (visibleDogs.isEmpty)
@@ -259,7 +336,7 @@ class _HomePageState extends State<HomePage> {
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _addDog,
         icon: const Icon(Icons.add_rounded),
-        label: const Text('Record dog'),
+        label: const Text('Record a furfriend'),
       ),
     );
   }
@@ -403,50 +480,78 @@ class _DogTile extends StatelessWidget {
   final VoidCallback onEdit;
 
   @override
-  Widget build(BuildContext context) => Card(
-    margin: const EdgeInsets.only(bottom: 10),
-    elevation: 0,
-    color: Colors.white,
-    child: ListTile(
-      onTap: () {
-        Navigator.of(context).push(
-          MaterialPageRoute<void>(builder: (_) => _DogDetailsPage(dog: dog)),
-        );
-      },
-      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
-      title: Text(
-        dog.name.isEmpty ? 'Unnamed ${dog.animalCategory}' : dog.name,
-        style: const TextStyle(fontWeight: FontWeight.w700),
-      ),
-      subtitle: Text(
-        'Tag ID: ${dog.identification.isEmpty ? 'not set' : dog.identification}',
-      ),
-      trailing: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          ClipOval(
-            child: SizedBox(
-              width: 56,
-              height: 56,
-              child: dog.photoPath?.startsWith('http') ?? false
-                  ? Image.network(
-                      dog.photoPath!,
-                      fit: BoxFit.cover,
-                      errorBuilder: (_, _, _) => _photoPlaceholder(context),
-                    )
-                  : _photoPlaceholder(context),
+  Widget build(BuildContext context) {
+    final vaccinationNeedsAttention =
+        dog.vaccinationDueSoon ||
+        (!dog.rabiesVaccinated && !dog.nineInOneVaccinated);
+    final vaccinationTooltip = dog.vaccinationDueSoon
+        ? 'Vaccination due within one month'
+        : 'No vaccination recorded';
+
+    return Card(
+      margin: const EdgeInsets.only(bottom: 10),
+      elevation: 0,
+      color: Colors.white,
+      child: ListTile(
+        onTap: () {
+          Navigator.of(context).push(
+            MaterialPageRoute<void>(builder: (_) => _DogDetailsPage(dog: dog)),
+          );
+        },
+        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
+        leading: ClipOval(
+          child: SizedBox(
+            width: 56,
+            height: 56,
+            child: dog.photoPath?.startsWith('http') ?? false
+                ? Image.network(
+                    dog.photoPath!,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, _, _) => _photoPlaceholder(context),
+                  )
+                : _photoPlaceholder(context),
+          ),
+        ),
+        title: Text(
+          dog.name.isEmpty ? 'Unnamed ${dog.animalCategory}' : dog.name,
+          style: const TextStyle(fontWeight: FontWeight.w700),
+        ),
+        subtitle: Text(
+          'Tag ID: ${dog.identification.isEmpty ? 'not set' : dog.identification}',
+        ),
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (dog.sterilization != SterilizationStatus.yes) ...[
+              const Tooltip(
+                message: 'Not sterilized',
+                child: Icon(
+                  Icons.content_cut_outlined,
+                  color: Color(0xffb54708),
+                ),
+              ),
+              const SizedBox(width: 8),
+            ],
+            if (vaccinationNeedsAttention) ...[
+              Tooltip(
+                message: vaccinationTooltip,
+                child: const Icon(
+                  Icons.notifications_active_outlined,
+                  color: Color(0xffb54708),
+                ),
+              ),
+              const SizedBox(width: 8),
+            ],
+            IconButton(
+              onPressed: onEdit,
+              icon: const Icon(Icons.edit_outlined),
+              tooltip: 'Edit record',
             ),
-          ),
-          const SizedBox(width: 10),
-          IconButton(
-            onPressed: onEdit,
-            icon: const Icon(Icons.edit_outlined),
-            tooltip: 'Edit record',
-          ),
-        ],
+          ],
+        ),
       ),
-    ),
-  );
+    );
+  }
 
   Widget _photoPlaceholder(BuildContext context) => Container(
     color: const Color(0xffdcefe7),
@@ -478,7 +583,9 @@ class _DogDetailsPage extends StatelessWidget {
             children: [
               Expanded(
                 child: Text(
-                  dog.name.isEmpty ? 'Unnamed ${dog.animalCategory}' : dog.name,
+                  dog.name.isEmpty
+                      ? 'Unnamed ${dog.animalCategory}'
+                      : '${dog.name[0].toUpperCase()}${dog.name.substring(1)}',
                   style: Theme.of(context).textTheme.headlineMedium
                       ?.copyWith(fontWeight: FontWeight.w800),
                 ),
@@ -504,12 +611,12 @@ class _DogDetailsPage extends StatelessWidget {
           const SizedBox(height: 16),
           _DetailSection(
             title: 'Primary details',
+            highlightedValue: dog.animalCategory,
             values: [
-              _DetailValue('Animal category', dog.animalCategory),
               _DetailValue('Gender', _display(dog.gender)),
               _DetailValue('Age', _display(dog.age)),
               _DetailValue('Breed', _display(dog.breed)),
-              _DetailValue('Color / Identifying marks', _display(dog.color)),
+              _DetailValue('Color / Identifying Marks', _display(dog.color)),
               _DetailValue('Notes', _display(dog.notes)),
               _DetailValue('Area', _display(dog.area)),
             ],
@@ -526,7 +633,7 @@ class _DogDetailsPage extends StatelessWidget {
                   children: [
                     const Text(
                       'Location',
-                      style: TextStyle(fontWeight: FontWeight.w500),
+                      style: TextStyle(fontWeight: FontWeight.w700),
                     ),
                     const SizedBox(height: 8),
                     Row(
@@ -561,11 +668,11 @@ class _DogDetailsPage extends StatelessWidget {
             ),
           const SizedBox(height: 16),
           _DetailSection(
-            title: 'Record information',
+            title: 'Record Information',
+            compact: true,
             values: [
-              _DetailValue('Record ID', dog.id),
               _DetailValue('Created', _formatDate(dog.createdAt)),
-              _DetailValue('Last updated', _formatDate(dog.updatedAt)),
+              _DetailValue('Last Updated', _formatDate(dog.updatedAt)),
             ],
           ),
         ],
@@ -607,41 +714,87 @@ class _DetailValue {
 }
 
 class _DetailSection extends StatelessWidget {
-  const _DetailSection({required this.title, required this.values});
+  const _DetailSection({
+    required this.title,
+    required this.values,
+    this.compact = false,
+    this.highlightedValue,
+  });
 
   final String title;
   final List<_DetailValue> values;
+  final bool compact;
+  final String? highlightedValue;
 
   @override
-  Widget build(BuildContext context) => Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      Text(title, style: const TextStyle(fontWeight: FontWeight.w500)),
-      const SizedBox(height: 8),
-      ...values.map(
-        (item) => Padding(
-          padding: const EdgeInsets.symmetric(vertical: 9),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              SizedBox(
-                width: 132,
-                child: Text(
-                  item.label,
-                  style: const TextStyle(color: Colors.black54),
-                ),
-              ),
-              Expanded(
-                child: Text(
-                  item.value,
-                  style: const TextStyle(fontWeight: FontWeight.w600),
-                ),
-              ),
-            ],
+  Widget build(BuildContext context) => Container(
+    padding: EdgeInsets.all(compact ? 12 : 16),
+    decoration: compact
+        ? null
+        : BoxDecoration(
+            color: Colors.white,
+            border: Border.all(color: const Color(0xffe2e5df)),
+            borderRadius: BorderRadius.circular(8),
+          ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
+          style: TextStyle(
+            fontSize: compact ? 13 : 16,
+            fontWeight: FontWeight.w700,
           ),
         ),
-      ),
-    ],
+        SizedBox(height: compact ? 4 : 10),
+        if (highlightedValue != null) ...[
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+            decoration: BoxDecoration(
+              color: const Color(0xffdcefe7),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Text(
+              '${highlightedValue![0].toUpperCase()}${highlightedValue!.substring(1)}',
+              style: const TextStyle(
+                color: Color(0xff1c6b5a),
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+          const SizedBox(height: 6),
+        ],
+        ...values.map(
+          (item) => Padding(
+            padding: EdgeInsets.symmetric(vertical: compact ? 4 : 7),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                SizedBox(
+                  width: compact ? 104 : 132,
+                  child: Text(
+                    item.label,
+                    style: TextStyle(
+                      fontSize: compact ? 11 : 13,
+                      color: Colors.black54,
+                    ),
+                  ),
+                ),
+                Expanded(
+                  child: Text(
+                    item.value,
+                    style: TextStyle(
+                      fontSize: compact ? 11 : 13,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    ),
   );
 }
 
@@ -651,36 +804,50 @@ class _MedicalRecordsSection extends StatelessWidget {
   final Dog dog;
 
   @override
-  Widget build(BuildContext context) => Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      const Text(
-        'Medical records',
-        style: TextStyle(fontWeight: FontWeight.w500),
-      ),
-      const SizedBox(height: 8),
-      Wrap(
-        spacing: 8,
-        runSpacing: 8,
-        children: [
-          _MedicalRecordBadge(
-            icon: Icons.content_cut_outlined,
-            label: 'Sterilized',
-            complete: dog.sterilization == SterilizationStatus.yes,
-          ),
-          _MedicalRecordBadge(
-            icon: Icons.shield_outlined,
-            label: 'Rabies vaccinated',
-            complete: dog.rabiesVaccinated,
-          ),
-          _MedicalRecordBadge(
-            icon: Icons.medication_outlined,
-            label: '9-in-1 vaccinated',
-            complete: dog.nineInOneVaccinated,
-          ),
-        ],
-      ),
-    ],
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.all(16),
+    decoration: BoxDecoration(
+      color: Colors.white,
+      border: Border.all(color: const Color(0xffe2e5df)),
+      borderRadius: BorderRadius.circular(8),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Sterilization Vaccination Records',
+          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+        ),
+        const SizedBox(height: 10),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            _MedicalRecordBadge(
+              icon: Icons.content_cut_outlined,
+              label: 'Sterilized',
+              complete: dog.sterilization == SterilizationStatus.yes,
+            ),
+            _MedicalRecordBadge(
+              icon: Icons.shield_outlined,
+              label: 'Rabies vaccinated',
+              complete: dog.rabiesVaccinated,
+            ),
+            _MedicalRecordBadge(
+              icon: Icons.medication_outlined,
+              label: '9-in-1 vaccinated',
+              complete: dog.nineInOneVaccinated,
+            ),
+            if (dog.vaccinationDueSoon)
+              const _MedicalRecordBadge(
+                icon: Icons.notifications_active_outlined,
+                label: 'Vaccination due soon',
+                complete: true,
+              ),
+          ],
+        ),
+      ],
+    ),
   );
 }
 
@@ -808,6 +975,7 @@ class _AddDogDialogState extends State<_AddDogDialog> {
         : dog.sterilization;
     _rabies = dog.rabiesVaccinated;
     _nineInOne = dog.nineInOneVaccinated;
+    _vaccinationDate = dog.vaccinationDate;
   }
 
   @override
@@ -939,7 +1107,7 @@ class _AddDogDialogState extends State<_AddDogDialog> {
   Widget build(BuildContext context) {
     final dialogHeight = MediaQuery.sizeOf(context).height * 0.7;
     return AlertDialog(
-      title: Text(_page == 0 ? 'Record a stray dog' : 'Health details'),
+      title: Text(_page == 0 ? 'Record a furfriend' : 'Health details'),
       content: SizedBox(
         width: 320,
         height: dialogHeight,
@@ -1079,7 +1247,6 @@ class _AddDogDialogState extends State<_AddDogDialog> {
                       const SizedBox(height: 8),
                       TextFormField(
                         controller: _identifyingMarks,
-                        maxLines: 2,
                         decoration: const InputDecoration(
                           labelText: 'Color / Identifying marks',
                         ),
@@ -1087,7 +1254,6 @@ class _AddDogDialogState extends State<_AddDogDialog> {
                       const SizedBox(height: 8),
                       TextFormField(
                         controller: _notes,
-                        maxLines: 2,
                         decoration: const InputDecoration(labelText: 'Notes'),
                       ),
                       const SizedBox(height: 8),

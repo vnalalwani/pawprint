@@ -11,10 +11,10 @@ void main() {
     await tester.pumpWidget(MyApp(repository: repository));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Record dog'));
+    await tester.tap(find.text('Record a furfriend'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Record a stray dog'), findsOneWidget);
+    expect(find.text('Record a furfriend'), findsOneWidget);
     expect(find.text('Breed'), findsOneWidget);
     expect(find.text('Color / Identifying marks'), findsOneWidget);
     expect(find.text('Tag ID'), findsNothing);

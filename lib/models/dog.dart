@@ -17,6 +17,7 @@ class Dog {
     this.sterilization = SterilizationStatus.unknown,
     this.rabiesVaccinated = false,
     this.nineInOneVaccinated = false,
+    this.vaccinationDate,
     this.sterilizedOn,
     this.medicalIssues = '',
     this.photoKey,
@@ -43,6 +44,7 @@ class Dog {
   final SterilizationStatus sterilization;
   final bool rabiesVaccinated;
   final bool nineInOneVaccinated;
+  final DateTime? vaccinationDate;
   final DateTime? sterilizedOn;
   final String medicalIssues;
   final String? photoKey;
@@ -57,6 +59,19 @@ class Dog {
 
   bool get hasLocation => latitude != null && longitude != null;
 
+  bool get vaccinationDueSoon {
+    if (vaccinationDate == null ||
+        (!rabiesVaccinated && !nineInOneVaccinated)) {
+      return false;
+    }
+    final reminderDate = DateTime(
+      vaccinationDate!.year,
+      vaccinationDate!.month + 11,
+      vaccinationDate!.day,
+    );
+    return !DateTime.now().isBefore(reminderDate);
+  }
+
   Dog copyWith({
     String? name,
     String? breed,
@@ -65,6 +80,7 @@ class Dog {
     SterilizationStatus? sterilization,
     bool? rabiesVaccinated,
     bool? nineInOneVaccinated,
+    DateTime? vaccinationDate,
     DateTime? sterilizedOn,
     bool clearSterilizedOn = false,
     String? medicalIssues,
@@ -93,6 +109,7 @@ class Dog {
       sterilization: sterilization ?? this.sterilization,
       rabiesVaccinated: rabiesVaccinated ?? this.rabiesVaccinated,
       nineInOneVaccinated: nineInOneVaccinated ?? this.nineInOneVaccinated,
+      vaccinationDate: vaccinationDate ?? this.vaccinationDate,
       sterilizedOn: clearSterilizedOn
           ? null
           : (sterilizedOn ?? this.sterilizedOn),
@@ -123,6 +140,7 @@ class Dog {
     'sterilization': sterilization.name,
     'rabiesVaccinated': rabiesVaccinated,
     'nineInOneVaccinated': nineInOneVaccinated,
+    'vaccinationDate': vaccinationDate?.toIso8601String(),
     'sterilizedOn': sterilizedOn?.toIso8601String(),
     'medicalIssues': medicalIssues,
     'photoKey': photoKey,
@@ -153,6 +171,9 @@ class Dog {
       ),
       rabiesVaccinated: (map['rabiesVaccinated'] as bool?) ?? false,
       nineInOneVaccinated: (map['nineInOneVaccinated'] as bool?) ?? false,
+      vaccinationDate: map['vaccinationDate'] == null
+          ? null
+          : DateTime.parse(map['vaccinationDate']! as String),
       sterilizedOn: map['sterilizedOn'] == null
           ? null
           : DateTime.parse(map['sterilizedOn']! as String),

@@ -46,7 +46,9 @@ class DogRepository {
     try {
       final rows = await _client
           .from('sterilization_vaccination_details')
-          .select('dog_id, sterilization_status, rabies, nine_in_one')
+          .select(
+            'dog_id, sterilization_status, rabies, nine_in_one, vaccination_date',
+          )
           .inFilter('dog_id', dogIds);
       return {for (final row in rows) row['dog_id'] as String: row};
     } on PostgrestException {
@@ -79,6 +81,9 @@ class DogRepository {
       ),
       rabiesVaccinated: (health?['rabies'] as bool?) ?? false,
       nineInOneVaccinated: (health?['nine_in_one'] as bool?) ?? false,
+      vaccinationDate: health?['vaccination_date'] == null
+          ? null
+          : DateTime.parse(health!['vaccination_date'] as String),
       color:
           (row['color'] as String?) ??
           (row['identifying_marks'] as String?) ??
