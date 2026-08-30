@@ -1,0 +1,40 @@
+workflows:
+  ios-testflight:
+    name: Pawprint iOS TestFlight
+    max_build_duration: 60
+    instance_type: mac_mini_m2
+
+    integrations:
+      app_store_connect: Pawprint App Store Connect
+
+    environment:
+      flutter: stable
+      ios_signing:
+        distribution_type: app_store
+        bundle_identifier: com.pawprint.pawprint
+      vars:
+        BUNDLE_ID: com.pawprint.pawprint
+
+    scripts:
+      - name: Install Flutter dependencies
+        script: flutter pub get
+      - name: Run Flutter analysis
+        script: flutter analyze
+      - name: Apply iOS signing profiles
+        script: xcode-project use-profiles
+      - name: Build signed iOS IPA
+        script: |
+          flutter build ipa \
+            --release \
+            --build-name=1.0.0 \
+            --build-number=$BUILD_NUMBER
+
+    artifacts:
+      - build/ios/ipa/*.ipa
+      - /tmp/xcodebuild_logs/*.log
+      - flutter_drive.log
+
+    publishing:
+      app_store_connect:
+        auth: integration
+        submit_to_testflight: true
