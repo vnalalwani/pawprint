@@ -828,7 +828,9 @@ class _MedicalNotesSection extends StatelessWidget {
               columns: const [
                 DataColumn(label: Text('Condition')),
                 DataColumn(label: Text('Status')),
+                DataColumn(label: Text('Treatment Given')),
                 DataColumn(label: Text('Started')),
+                DataColumn(label: Text('End Date')),
                 DataColumn(label: Text('Caretaker')),
                 DataColumn(label: Text('Vet Details')),
               ],
@@ -838,7 +840,15 @@ class _MedicalNotesSection extends StatelessWidget {
                       cells: [
                         DataCell(Text(note.condition)),
                         DataCell(Text(note.treatmentStatus)),
+                        DataCell(Text(note.treatmentGiven)),
                         DataCell(Text(_formatDate(note.startedDate))),
+                        DataCell(
+                          Text(
+                            note.endDate == null
+                                ? '-'
+                                : _formatDate(note.endDate!),
+                          ),
+                        ),
                         DataCell(Text(note.caretaker)),
                         DataCell(Text(note.vetDetails)),
                       ],
@@ -868,14 +878,17 @@ class _MedicalNoteDialogState extends State<_MedicalNoteDialog> {
   final _formKey = GlobalKey<FormState>();
   final _condition = TextEditingController();
   final _treatmentStatus = TextEditingController();
+  final _treatmentGiven = TextEditingController();
   final _caretaker = TextEditingController();
   final _vetDetails = TextEditingController();
   DateTime _startedDate = DateTime.now();
+  DateTime? _endDate;
 
   @override
   void dispose() {
     _condition.dispose();
     _treatmentStatus.dispose();
+    _treatmentGiven.dispose();
     _caretaker.dispose();
     _vetDetails.dispose();
     super.dispose();
@@ -891,6 +904,16 @@ class _MedicalNoteDialogState extends State<_MedicalNoteDialog> {
     if (date != null && mounted) setState(() => _startedDate = date);
   }
 
+  Future<void> _pickEndDate() async {
+    final date = await showDatePicker(
+      context: context,
+      initialDate: _endDate ?? _startedDate,
+      firstDate: _startedDate,
+      lastDate: DateTime.now(),
+    );
+    if (date != null && mounted) setState(() => _endDate = date);
+  }
+
   void _save() {
     if (!_formKey.currentState!.validate()) return;
     Navigator.pop(
@@ -900,7 +923,9 @@ class _MedicalNoteDialogState extends State<_MedicalNoteDialog> {
         dogId: widget.dogId,
         condition: _condition.text.trim(),
         treatmentStatus: _treatmentStatus.text.trim(),
+        treatmentGiven: _treatmentGiven.text.trim(),
         startedDate: _startedDate,
+        endDate: _endDate,
         caretaker: _caretaker.text.trim(),
         vetDetails: _vetDetails.text.trim(),
       ),
@@ -936,6 +961,10 @@ class _MedicalNoteDialogState extends State<_MedicalNoteDialog> {
                     ? 'Enter the treatment status'
                     : null,
               ),
+              TextFormField(
+                controller: _treatmentGiven,
+                decoration: const InputDecoration(labelText: 'Treatment Given'),
+              ),
               Align(
                 alignment: Alignment.centerLeft,
                 child: TextButton.icon(
@@ -946,9 +975,24 @@ class _MedicalNoteDialogState extends State<_MedicalNoteDialog> {
                   ),
                 ),
               ),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton.icon(
+                  onPressed: _pickEndDate,
+                  icon: const Icon(Icons.event_available_outlined),
+                  label: Text(
+                    _endDate == null
+                        ? 'End Date (optional)'
+                        : 'Ended: ${_MedicalNotesSection._formatDate(_endDate!)}',
+                  ),
+                ),
+              ),
               TextFormField(
                 controller: _caretaker,
-                decoration: const InputDecoration(labelText: 'Caretaker'),
+                keyboardType: TextInputType.phone,
+                decoration: const InputDecoration(
+                  labelText: 'Caretaker Name or Mobile Number',
+                ),
               ),
               TextFormField(
                 controller: _vetDetails,

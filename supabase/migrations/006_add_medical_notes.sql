@@ -4,7 +4,9 @@ CREATE TABLE IF NOT EXISTS treatfeedtails.medical_notes (
         ON DELETE CASCADE,
     medical_condition TEXT NOT NULL,
     treatment_status TEXT NOT NULL,
+    treatment_given TEXT NOT NULL DEFAULT '',
     started_date DATE NOT NULL,
+    end_date DATE,
     caretaker TEXT NOT NULL DEFAULT '',
     vet_details TEXT NOT NULL DEFAULT ''
 );

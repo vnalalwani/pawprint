@@ -29,6 +29,7 @@ model PrimaryDogDetails {
   updatedDate      DateTime @default(now()) @map("updated_date")
   updatedBy        String?  @map("updated_by")
   healthDetails    SterilizationVaccinationDetails?
+  medicalNotes     MedicalNote[]
 
   @@index([area], map: "primary_dog_details_area_idx")
   @@index([updatedDate(sort: Desc)], map: "primary_dog_details_updated_date_idx")
@@ -46,5 +47,22 @@ model SterilizationVaccinationDetails {
   dog                 PrimaryDogDetails @relation(fields: [dogId], references: [id], onDelete: Cascade)
 
   @@map("sterilization_vaccination_details")
+  @@schema("treatfeedtails")
+}
+
+model MedicalNote {
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  dogId           String   @map("dog_id") @db.Uuid
+  medicalCondition String   @map("medical_condition")
+  treatmentStatus String   @map("treatment_status")
+  treatmentGiven  String   @default("") @map("treatment_given")
+  startedDate     DateTime @map("started_date") @db.Date
+  endDate         DateTime? @map("end_date") @db.Date
+  caretaker       String   @default("")
+  vetDetails      String   @default("") @map("vet_details")
+  dog             PrimaryDogDetails @relation(fields: [dogId], references: [id], onDelete: Cascade)
+
+  @@index([dogId], map: "medical_notes_dog_id_idx")
+  @@map("medical_notes")
   @@schema("treatfeedtails")
 }

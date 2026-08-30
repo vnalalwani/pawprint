@@ -4,7 +4,9 @@ class MedicalNote {
     required this.dogId,
     required this.condition,
     required this.treatmentStatus,
+    required this.treatmentGiven,
     required this.startedDate,
+    this.endDate,
     required this.caretaker,
     required this.vetDetails,
   });
@@ -13,7 +15,9 @@ class MedicalNote {
   final String dogId;
   final String condition;
   final String treatmentStatus;
+  final String treatmentGiven;
   final DateTime startedDate;
+  final DateTime? endDate;
   final String caretaker;
   final String vetDetails;
 }

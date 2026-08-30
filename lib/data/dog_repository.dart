@@ -207,7 +207,11 @@ class DogRepository {
             dogId: row['dog_id'] as String,
             condition: row['medical_condition'] as String,
             treatmentStatus: row['treatment_status'] as String,
+            treatmentGiven: (row['treatment_given'] as String?) ?? '',
             startedDate: DateTime.parse(row['started_date'] as String),
+            endDate: row['end_date'] == null
+                ? null
+                : DateTime.parse(row['end_date'] as String),
             caretaker: (row['caretaker'] as String?) ?? '',
             vetDetails: (row['vet_details'] as String?) ?? '',
           ),
@@ -222,7 +226,9 @@ class DogRepository {
       'dog_id': note.dogId,
       'medical_condition': note.condition,
       'treatment_status': note.treatmentStatus,
+      'treatment_given': note.treatmentGiven,
       'started_date': note.startedDate.toIso8601String().split('T').first,
+      'end_date': note.endDate?.toIso8601String().split('T').first,
       'caretaker': note.caretaker,
       'vet_details': note.vetDetails,
     }, onConflict: 'id');
