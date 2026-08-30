@@ -25,30 +25,41 @@ class DogRepository {
 
   Future<List<Dog>> allDogs() async {
     _requireConnection();
-    late final List<Map<String, dynamic>> rows;
-    try {
-      rows = await _client
-          .from('primary_dog_details')
-          .select(
-            '*, sterilization_vaccination_details(sterilization_status, vaccinated, rabies, nine_in_one)',
-          )
-          .order('updated_date', ascending: false);
-    } on PostgrestException {
-      rows = await _client
-          .from('primary_dog_details')
-          .select()
-          .order('updated_date', ascending: false);
-    }
-    return Future.wait(rows.map(_dogFromSupabase));
+    final rows = await _client
+        .from('primary_dog_details')
+        .select()
+        .order('updated_date', ascending: false);
+    final dogIds = rows.map((row) => row['id'] as String).toList();
+    final healthByDogId = await _healthDetailsFor(dogIds);
+    return Future.wait(
+      rows.map(
+        (row) =>
+            _dogFromSupabase(row, health: healthByDogId[row['id'] as String]),
+      ),
+    );
   }
 
-  Future<Dog> _dogFromSupabase(Map<String, dynamic> row) async {
+  Future<Map<String, Map<String, dynamic>>> _healthDetailsFor(
+    List<String> dogIds,
+  ) async {
+    if (dogIds.isEmpty) return {};
+    try {
+      final rows = await _client
+          .from('sterilization_vaccination_details')
+          .select('dog_id, sterilization_status, rabies, nine_in_one')
+          .inFilter('dog_id', dogIds);
+      return {for (final row in rows) row['dog_id'] as String: row};
+    } on PostgrestException {
+      return {};
+    }
+  }
+
+  Future<Dog> _dogFromSupabase(
+    Map<String, dynamic> row, {
+    Map<String, dynamic>? health,
+  }) async {
     final storedPhotoPath = row['photo_path'] as String?;
     final photoPath = await _photoUrl(storedPhotoPath);
-    final healthRows = row['sterilization_vaccination_details'];
-    final health = healthRows is List && healthRows.isNotEmpty
-        ? healthRows.first as Map<String, dynamic>
-        : null;
     final createdDate = DateTime.parse(row['created_date'] as String);
     final updatedDate = DateTime.parse(row['updated_date'] as String);
     return Dog(
@@ -66,7 +77,6 @@ class DogRepository {
         (status) => status.name == health?['sterilization_status'],
         orElse: () => SterilizationStatus.unknown,
       ),
-      vaccinated: (health?['vaccinated'] as bool?) ?? false,
       rabiesVaccinated: (health?['rabies'] as bool?) ?? false,
       nineInOneVaccinated: (health?['nine_in_one'] as bool?) ?? false,
       color:
@@ -100,23 +110,14 @@ class DogRepository {
 
   Future<Dog?> dogById(String id) async {
     _requireConnection();
-    Map<String, dynamic>? row;
-    try {
-      row = await _client
-          .from('primary_dog_details')
-          .select(
-            '*, sterilization_vaccination_details(sterilization_status, vaccinated, rabies, nine_in_one)',
-          )
-          .eq('id', id)
-          .maybeSingle();
-    } on PostgrestException {
-      row = await _client
-          .from('primary_dog_details')
-          .select()
-          .eq('id', id)
-          .maybeSingle();
-    }
-    return row == null ? null : await _dogFromSupabase(row);
+    final row = await _client
+        .from('primary_dog_details')
+        .select()
+        .eq('id', id)
+        .maybeSingle();
+    if (row == null) return null;
+    final healthByDogId = await _healthDetailsFor([id]);
+    return _dogFromSupabase(row, health: healthByDogId[id]);
   }
 
   Future<Dog> saveDog(Dog dog) async {
@@ -180,7 +181,6 @@ class DogRepository {
     await _client.from('sterilization_vaccination_details').upsert({
       'dog_id': details.dogId,
       'sterilization_status': details.sterilization.name,
-      'vaccinated': details.vaccinated,
       'rabies': details.rabies,
       'nine_in_one': details.nineInOne,
       'vaccination_date': details.vaccinationDate?.toIso8601String(),

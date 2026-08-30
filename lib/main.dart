@@ -514,6 +514,8 @@ class _DogDetailsPage extends StatelessWidget {
               _DetailValue('Area', _display(dog.area)),
             ],
           ),
+          const SizedBox(height: 16),
+          _MedicalRecordsSection(dog: dog),
           if (dog.hasLocation)
             Padding(
               padding: const EdgeInsets.only(top: 16),
@@ -643,6 +645,81 @@ class _DetailSection extends StatelessWidget {
   );
 }
 
+class _MedicalRecordsSection extends StatelessWidget {
+  const _MedicalRecordsSection({required this.dog});
+
+  final Dog dog;
+
+  @override
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      const Text(
+        'Medical records',
+        style: TextStyle(fontWeight: FontWeight.w500),
+      ),
+      const SizedBox(height: 8),
+      Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        children: [
+          _MedicalRecordBadge(
+            icon: Icons.content_cut_outlined,
+            label: 'Sterilized',
+            complete: dog.sterilization == SterilizationStatus.yes,
+          ),
+          _MedicalRecordBadge(
+            icon: Icons.shield_outlined,
+            label: 'Rabies vaccinated',
+            complete: dog.rabiesVaccinated,
+          ),
+          _MedicalRecordBadge(
+            icon: Icons.medication_outlined,
+            label: '9-in-1 vaccinated',
+            complete: dog.nineInOneVaccinated,
+          ),
+        ],
+      ),
+    ],
+  );
+}
+
+class _MedicalRecordBadge extends StatelessWidget {
+  const _MedicalRecordBadge({
+    required this.icon,
+    required this.label,
+    required this.complete,
+  });
+
+  final IconData icon;
+  final String label;
+  final bool complete;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+    decoration: BoxDecoration(
+      color: complete ? const Color(0xffdcefe7) : const Color(0xffeeeeee),
+      borderRadius: BorderRadius.circular(8),
+    ),
+    child: Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(
+          icon,
+          size: 18,
+          color: complete ? const Color(0xff1c6b5a) : Colors.black45,
+        ),
+        const SizedBox(width: 6),
+        Text(
+          '$label: ${complete ? 'Yes' : 'No'}',
+          style: const TextStyle(fontWeight: FontWeight.w600),
+        ),
+      ],
+    ),
+  );
+}
+
 class _EmptyState extends StatelessWidget {
   const _EmptyState({required this.onAddDog});
   final VoidCallback onAddDog;
@@ -702,7 +779,6 @@ class _AddDogDialogState extends State<_AddDogDialog> {
   double? _latitude;
   double? _longitude;
   SterilizationStatus _sterilization = SterilizationStatus.no;
-  bool _vaccinated = false;
   bool _rabies = false;
   bool _nineInOne = false;
   DateTime? _vaccinationDate;
@@ -730,6 +806,8 @@ class _AddDogDialogState extends State<_AddDogDialog> {
     _sterilization = dog.sterilization == SterilizationStatus.unknown
         ? SterilizationStatus.no
         : dog.sterilization;
+    _rabies = dog.rabiesVaccinated;
+    _nineInOne = dog.nineInOneVaccinated;
   }
 
   @override
@@ -813,7 +891,7 @@ class _AddDogDialogState extends State<_AddDogDialog> {
   }
 
   void _save() {
-    if (_vaccinated && (!_rabies && !_nineInOne || _vaccinationDate == null)) {
+    if ((_rabies || _nineInOne) && _vaccinationDate == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Choose a vaccine and its vaccination date.'),
@@ -849,7 +927,6 @@ class _AddDogDialogState extends State<_AddDogDialog> {
         healthDetails: DogHealthDetails(
           dogId: recordId,
           sterilization: _sterilization,
-          vaccinated: _vaccinated,
           rabies: _rabies,
           nineInOne: _nineInOne,
           vaccinationDate: _vaccinationDate,
@@ -1054,22 +1131,11 @@ class _AddDogDialogState extends State<_AddDogDialog> {
                   )
                 : _HealthDetailsPage(
                     sterilization: _sterilization,
-                    vaccinated: _vaccinated,
                     rabies: _rabies,
                     nineInOne: _nineInOne,
                     vaccinationDate: _vaccinationDate,
                     onSterilizationChanged: (status) {
                       setState(() => _sterilization = status);
-                    },
-                    onVaccinatedChanged: (value) {
-                      setState(() {
-                        _vaccinated = value;
-                        if (!value) {
-                          _rabies = false;
-                          _nineInOne = false;
-                          _vaccinationDate = null;
-                        }
-                      });
                     },
                     onRabiesChanged: (value) {
                       setState(() => _rabies = value);
@@ -1112,24 +1178,20 @@ class _DogRecordDraft {
 class _HealthDetailsPage extends StatelessWidget {
   const _HealthDetailsPage({
     required this.sterilization,
-    required this.vaccinated,
     required this.rabies,
     required this.nineInOne,
     required this.vaccinationDate,
     required this.onSterilizationChanged,
-    required this.onVaccinatedChanged,
     required this.onRabiesChanged,
     required this.onNineInOneChanged,
     required this.onSelectDate,
   });
 
   final SterilizationStatus sterilization;
-  final bool vaccinated;
   final bool rabies;
   final bool nineInOne;
   final DateTime? vaccinationDate;
   final ValueChanged<SterilizationStatus> onSterilizationChanged;
-  final ValueChanged<bool> onVaccinatedChanged;
   final ValueChanged<bool> onRabiesChanged;
   final ValueChanged<bool> onNineInOneChanged;
   final VoidCallback onSelectDate;
@@ -1152,28 +1214,19 @@ class _HealthDetailsPage extends StatelessWidget {
         ),
       ),
       const SizedBox(height: 12),
-      SwitchListTile(
+      CheckboxListTile(
         contentPadding: EdgeInsets.zero,
-        title: const Text(
-          'Vaccinated',
-          style: TextStyle(fontWeight: FontWeight.w600),
-        ),
-        value: vaccinated,
-        onChanged: onVaccinatedChanged,
+        title: const Text('Rabies vaccinated'),
+        value: rabies,
+        onChanged: (value) => onRabiesChanged(value ?? false),
       ),
-      if (vaccinated) ...[
-        CheckboxListTile(
-          contentPadding: EdgeInsets.zero,
-          title: const Text('Rabies'),
-          value: rabies,
-          onChanged: (value) => onRabiesChanged(value ?? false),
-        ),
-        CheckboxListTile(
-          contentPadding: EdgeInsets.zero,
-          title: const Text('9-in-1'),
-          value: nineInOne,
-          onChanged: (value) => onNineInOneChanged(value ?? false),
-        ),
+      CheckboxListTile(
+        contentPadding: EdgeInsets.zero,
+        title: const Text('9-in-1 vaccinated'),
+        value: nineInOne,
+        onChanged: (value) => onNineInOneChanged(value ?? false),
+      ),
+      if (rabies || nineInOne) ...[
         const SizedBox(height: 8),
         OutlinedButton.icon(
           onPressed: onSelectDate,

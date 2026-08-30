@@ -40,7 +40,6 @@ model SterilizationVaccinationDetails {
   id                  String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   dogId               String   @unique @map("dog_id") @db.Uuid
   sterilizationStatus String   @map("sterilization_status")
-  vaccinated          Boolean  @default(false)
   rabies              Boolean  @default(false)
   nineInOne           Boolean  @default(false) @map("nine_in_one")
   vaccinationDate     DateTime? @map("vaccination_date")

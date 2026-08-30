@@ -3,13 +3,12 @@ CREATE TABLE IF NOT EXISTS treatfeedtails.sterilization_vaccination_details (
     dog_id UUID NOT NULL UNIQUE REFERENCES treatfeedtails.primary_dog_details (id)
         ON DELETE CASCADE,
     sterilization_status TEXT NOT NULL CHECK (sterilization_status IN ('yes', 'no')),
-    vaccinated BOOLEAN NOT NULL DEFAULT FALSE,
     rabies BOOLEAN NOT NULL DEFAULT FALSE,
     nine_in_one BOOLEAN NOT NULL DEFAULT FALSE,
     vaccination_date TIMESTAMPTZ,
     CHECK (
-        (vaccinated AND (rabies OR nine_in_one) AND vaccination_date IS NOT NULL)
-        OR (NOT vaccinated AND NOT rabies AND NOT nine_in_one AND vaccination_date IS NULL)
+        ((rabies OR nine_in_one) AND vaccination_date IS NOT NULL)
+        OR (NOT rabies AND NOT nine_in_one AND vaccination_date IS NULL)
     )
 );
 

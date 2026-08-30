@@ -24,6 +24,7 @@ void main() {
 
     expect(find.text('Health details'), findsOneWidget);
     expect(find.text('Sterilized'), findsOneWidget);
-    expect(find.text('Vaccinated'), findsOneWidget);
+    expect(find.text('Rabies vaccinated'), findsOneWidget);
+    expect(find.text('9-in-1 vaccinated'), findsOneWidget);
   });
 }
