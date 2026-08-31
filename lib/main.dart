@@ -1,3 +1,5 @@
+import 'package:flutter/foundation.dart';
+
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -758,14 +760,22 @@ class _DogDetailsPageState extends State<_DogDetailsPage> {
   String _formatDate(DateTime value) => value.toLocal().toString();
 
   Future<void> _openGoogleMaps(double latitude, double longitude) async {
-    final googleMapsUrl =
-        'https://www.google.com/maps/search/?api=1&query=$latitude,$longitude';
-    if (await canLaunchUrl(Uri.parse(googleMapsUrl))) {
-      await launchUrl(
-        Uri.parse(googleMapsUrl),
-        mode: LaunchMode.externalApplication,
+    if (!kIsWeb) {
+      final geoUri = Uri.parse(
+        'geo:$latitude,$longitude?q=$latitude,$longitude',
       );
+
+      if (await launchUrl(geoUri, mode: LaunchMode.externalApplication)) {
+        return;
+      }
     }
+
+    // Web and Android fallback
+    final webUri = Uri.parse(
+      'https://www.google.com/maps/search/?api=1&query=$latitude,$longitude',
+    );
+
+    await launchUrl(webUri, mode: LaunchMode.externalApplication);
   }
 }
 
