@@ -1,5 +1,15 @@
 {
   "projects": {
     "default": "pawhere"
-  }
+  },
+  "targets": {
+    "pawprint-8075e": {
+      "hosting": {
+        "hellotails": [
+          "hellotails"
+        ]
+      }
+    }
+  },
+  "etags": {}
 }
