@@ -1,35 +1,19 @@
 {
-    "name": "pawhere",
-    "short_name": "pawhere",
+    "name": "Tail tail everywhere!",
+    "short_name": "Tail tail everywhere!",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",
     "theme_color": "#0175C2",
-    "description": "Community dog and cat registry.",
+    "description": "_A little place for the love and care of our pawfriends!",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [
         {
-            "src": "icons/Icon-192.png",
-            "sizes": "192x192",
-            "type": "image/png"
-        },
-        {
-            "src": "icons/Icon-512.png",
-            "sizes": "512x512",
-            "type": "image/png"
-        },
-        {
-            "src": "icons/Icon-maskable-192.png",
-            "sizes": "192x192",
+            "src": "web/favicon.png",
+            "sizes": "any",
             "type": "image/png",
-            "purpose": "maskable"
-        },
-        {
-            "src": "icons/Icon-maskable-512.png",
-            "sizes": "512x512",
-            "type": "image/png",
-            "purpose": "maskable"
+            "purpose": "any"
         }
     ]
 }
