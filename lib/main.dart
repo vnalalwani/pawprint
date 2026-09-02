@@ -498,12 +498,12 @@ class _HomePageState extends State<HomePage> {
     return Scaffold(
       appBar: AppBar(
         backgroundColor: const Color(0xfff5f3ee),
-        toolbarHeight: 94,
+        toolbarHeight: 128,
         flexibleSpace: Center(
           child: Image.asset(
             'logo.png',
-            width: 300,
-            height: 94,
+            width: 390,
+            height: 128,
             fit: BoxFit.contain,
           ),
         ),
@@ -545,12 +545,12 @@ class _HomePageState extends State<HomePage> {
               child: Padding(
                 padding: const EdgeInsets.only(right: 16),
                 child: CircleAvatar(
-                  backgroundColor: const Color(0xffe5b86d),
+                  backgroundColor: const Color.fromARGB(43, 9, 237, 210),
                   child: Text(
                     _profileInitials,
                     style: const TextStyle(
                       fontWeight: FontWeight.bold,
-                      color: Color(0xff4e3515),
+                      color: Color.fromARGB(255, 138, 88, 21),
                     ),
                   ),
                 ),
@@ -702,7 +702,7 @@ class _WelcomePanel extends StatelessWidget {
               ),
               SizedBox(height: 6),
               Text(
-                'Keep your pawfriends close, safe, and connected.',
+                'Keep your pawfriends close, safe and connected.',
                 style: TextStyle(color: Color(0xffd2ebe1), height: 1.35),
               ),
             ],
