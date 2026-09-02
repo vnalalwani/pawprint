@@ -27,6 +27,7 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'pawhere',
+      debugShowCheckedModeBanner: false,
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xff1c6b5a)),
         scaffoldBackgroundColor: const Color(0xfff5f3ee),
@@ -308,26 +309,6 @@ class _HomePageState extends State<HomePage> {
             fit: BoxFit.contain,
           ),
         ),
-        actions: [
-          IconButton(
-            onPressed: () {},
-            icon: const Icon(Icons.notifications_none_rounded),
-          ),
-          const Padding(
-            padding: EdgeInsets.only(right: 20, left: 6),
-            child: CircleAvatar(
-              radius: 18,
-              backgroundColor: Color(0xffe5b86d),
-              child: Text(
-                'VP',
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  color: Color(0xff4e3515),
-                ),
-              ),
-            ),
-          ),
-        ],
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
