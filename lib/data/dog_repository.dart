@@ -224,6 +224,19 @@ class DogRepository {
     }
   }
 
+  Future<Set<String>> dogIdsWithOngoingMedicalNotes() async {
+    _requireConnection();
+    try {
+      final rows = await _client
+          .from('medical_notes')
+          .select('dog_id')
+          .isFilter('end_date', null);
+      return rows.map((row) => row['dog_id'] as String).toSet();
+    } on PostgrestException {
+      return {};
+    }
+  }
+
   Future<void> saveMedicalNote(MedicalNote note) async {
     _requireConnection();
     await _client.from('medical_notes').upsert({

@@ -55,6 +55,9 @@ class _HomePageState extends State<HomePage> {
   bool _filterSterilized = false;
   bool _filterRabies = false;
   bool _filterNineInOne = false;
+  String? _filterGender;
+  bool _filterOngoingMedical = false;
+  Set<String> _dogIdsWithOngoingMedicalNotes = {};
 
   @override
   void initState() {
@@ -70,6 +73,8 @@ class _HomePageState extends State<HomePage> {
     List<Dog> dogs = [];
     try {
       dogs = await repository.allDogs();
+      _dogIdsWithOngoingMedicalNotes = await repository
+          .dogIdsWithOngoingMedicalNotes();
     } catch (error) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -103,7 +108,14 @@ class _HomePageState extends State<HomePage> {
       for (final note in draft.medicalNotes) {
         await _repository!.saveMedicalNote(note);
       }
-      if (mounted) setState(() => _dogs = [savedDog, ..._dogs]);
+      final dogIdsWithOngoingMedicalNotes = await _repository!
+          .dogIdsWithOngoingMedicalNotes();
+      if (mounted) {
+        setState(() {
+          _dogs = [savedDog, ..._dogs];
+          _dogIdsWithOngoingMedicalNotes = dogIdsWithOngoingMedicalNotes;
+        });
+      }
     } catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -145,6 +157,8 @@ class _HomePageState extends State<HomePage> {
           await _repository!.deleteMedicalNote(note.id);
         }
       }
+      final dogIdsWithOngoingMedicalNotes = await _repository!
+          .dogIdsWithOngoingMedicalNotes();
       if (!mounted) return;
       setState(() {
         _dogs = _dogs
@@ -153,6 +167,7 @@ class _HomePageState extends State<HomePage> {
                   existingDog.id == savedDog.id ? savedDog : existingDog,
             )
             .toList();
+        _dogIdsWithOngoingMedicalNotes = dogIdsWithOngoingMedicalNotes;
       });
     } catch (error) {
       if (!mounted) return;
@@ -166,7 +181,9 @@ class _HomePageState extends State<HomePage> {
     var sterilized = _filterSterilized;
     var rabies = _filterRabies;
     var nineInOne = _filterNineInOne;
-    final applied = await showDialog<(bool, bool, bool)>(
+    var gender = _filterGender;
+    var ongoingMedical = _filterOngoingMedical;
+    final applied = await showDialog<(bool, bool, bool, String?, bool)>(
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
@@ -192,16 +209,57 @@ class _HomePageState extends State<HomePage> {
                     setDialogState(() => nineInOne = value ?? false),
                 title: const Text('9-in-1 vaccinated'),
               ),
+              CheckboxListTile(
+                value: ongoingMedical,
+                onChanged: (value) =>
+                    setDialogState(() => ongoingMedical = value ?? false),
+                title: const Text('Ongoing medical condition / treatment'),
+              ),
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 6),
+                child: DropdownButtonFormField<String>(
+                  initialValue: gender,
+                  isExpanded: true,
+                  decoration: const InputDecoration(
+                    labelText: 'Gender',
+                    filled: true,
+                    fillColor: Color.fromARGB(255, 238, 255, 239),
+                  ),
+                  items: const [
+                    DropdownMenuItem(value: 'Male', child: Text('Male')),
+                    DropdownMenuItem(value: 'Female', child: Text('Female')),
+                    DropdownMenuItem(
+                      value: 'Mother Dog',
+                      child: Text('Mother Dog'),
+                    ),
+                    DropdownMenuItem(
+                      value: 'Male Pup',
+                      child: Text('Male Pup'),
+                    ),
+                    DropdownMenuItem(
+                      value: 'Female Pup',
+                      child: Text('Female Pup'),
+                    ),
+                  ],
+                  onChanged: (value) => setDialogState(() => gender = value),
+                ),
+              ),
             ],
           ),
           actions: [
             TextButton(
-              onPressed: () => Navigator.pop(context, (false, false, false)),
+              onPressed: () =>
+                  Navigator.pop(context, (false, false, false, null, false)),
               child: const Text('Clear'),
             ),
             FilledButton(
-              onPressed: () =>
-                  Navigator.pop(context, (sterilized, rabies, nineInOne)),
+              onPressed: () => Navigator.pop(context, (
+                sterilized,
+                rabies,
+                nineInOne,
+                gender,
+                ongoingMedical,
+              )),
               child: const Text('Apply'),
             ),
           ],
@@ -213,6 +271,8 @@ class _HomePageState extends State<HomePage> {
       _filterSterilized = applied.$1;
       _filterRabies = applied.$2;
       _filterNineInOne = applied.$3;
+      _filterGender = applied.$4;
+      _filterOngoingMedical = applied.$5;
     });
   }
 
@@ -224,10 +284,17 @@ class _HomePageState extends State<HomePage> {
           (!_filterSterilized ||
               dog.sterilization == SterilizationStatus.yes) &&
           (!_filterRabies || dog.rabiesVaccinated) &&
-          (!_filterNineInOne || dog.nineInOneVaccinated);
+          (!_filterNineInOne || dog.nineInOneVaccinated) &&
+          (_filterGender == null || dog.gender == _filterGender) &&
+          (!_filterOngoingMedical ||
+              _dogIdsWithOngoingMedicalNotes.contains(dog.id));
     }).toList();
     final hasActiveFilters =
-        _filterSterilized || _filterRabies || _filterNineInOne;
+        _filterSterilized ||
+        _filterRabies ||
+        _filterNineInOne ||
+        _filterGender != null ||
+        _filterOngoingMedical;
 
     return Scaffold(
       appBar: AppBar(
@@ -360,6 +427,10 @@ class _HomePageState extends State<HomePage> {
                         dog: dog,
                         repository: _repository!,
                         onEdit: () => _editDog(dog),
+                        isHealthy: dog.sterilization == SterilizationStatus.yes &&
+                            dog.rabiesVaccinated &&
+                            dog.nineInOneVaccinated &&
+                            !_dogIdsWithOngoingMedicalNotes.contains(dog.id),
                       ),
                     ),
                 ],
@@ -511,10 +582,12 @@ class _DogTile extends StatelessWidget {
     required this.dog,
     required this.repository,
     required this.onEdit,
+    required this.isHealthy,
   });
   final Dog dog;
   final DogRepository repository;
   final VoidCallback onEdit;
+  final bool isHealthy;
 
   @override
   Widget build(BuildContext context) {
@@ -551,9 +624,22 @@ class _DogTile extends StatelessWidget {
                 : _photoPlaceholder(context),
           ),
         ),
-        title: Text(
-          dog.name.isEmpty ? 'Unnamed ${dog.animalCategory}' : dog.name,
-          style: const TextStyle(fontWeight: FontWeight.w700),
+        title: Row(
+          children: [
+            if (isHealthy) ...[
+              const Tooltip(
+                message: 'Sterilized, fully vaccinated, and no ongoing treatment',
+                child: Icon(Icons.favorite_rounded, color: Color(0xffd14d62)),
+              ),
+              const SizedBox(width: 6),
+            ],
+            Expanded(
+              child: Text(
+                dog.name.isEmpty ? 'Unnamed ${dog.animalCategory}' : dog.name,
+                style: const TextStyle(fontWeight: FontWeight.w700),
+              ),
+            ),
+          ],
         ),
         subtitle: Text(
           'Tag ID: ${dog.identification.isEmpty ? 'not set' : dog.identification}',
@@ -1796,6 +1882,10 @@ class _AddDogDialogState extends State<_AddDogDialog> {
                           DropdownMenuItem(
                             value: 'Female',
                             child: Text('Female'),
+                          ),
+                          DropdownMenuItem(
+                            value: 'Mother Dog',
+                            child: Text('Mother Dog'),
                           ),
                           DropdownMenuItem(
                             value: 'Male Pup',
