@@ -427,7 +427,8 @@ class _HomePageState extends State<HomePage> {
                         dog: dog,
                         repository: _repository!,
                         onEdit: () => _editDog(dog),
-                        isHealthy: dog.sterilization == SterilizationStatus.yes &&
+                        isHealthy:
+                            dog.sterilization == SterilizationStatus.yes &&
                             dog.rabiesVaccinated &&
                             dog.nineInOneVaccinated &&
                             !_dogIdsWithOngoingMedicalNotes.contains(dog.id),
@@ -626,19 +627,23 @@ class _DogTile extends StatelessWidget {
         ),
         title: Row(
           children: [
-            if (isHealthy) ...[
-              const Tooltip(
-                message: 'Sterilized, fully vaccinated, and no ongoing treatment',
-                child: Icon(Icons.favorite_rounded, color: Color(0xffd14d62)),
-              ),
-              const SizedBox(width: 6),
-            ],
             Expanded(
               child: Text(
                 dog.name.isEmpty ? 'Unnamed ${dog.animalCategory}' : dog.name,
                 style: const TextStyle(fontWeight: FontWeight.w700),
               ),
             ),
+            if (isHealthy) ...[
+              const Tooltip(
+                message:
+                    'Sterilized, fully vaccinated, and no ongoing treatment',
+                child: Icon(
+                  Icons.favorite_rounded,
+                  color: Color.fromARGB(255, 1, 240, 100),
+                ),
+              ),
+              const SizedBox(width: 6),
+            ],
           ],
         ),
         subtitle: Text(
