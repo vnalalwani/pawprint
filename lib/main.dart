@@ -572,7 +572,7 @@ class _HomePageState extends State<HomePage> {
                       crossAxisCount: 4,
                       crossAxisSpacing: 8,
                       mainAxisSpacing: 8,
-                      mainAxisExtent: 68,
+                      mainAxisExtent: 52,
                       shrinkWrap: true,
                       physics: const NeverScrollableScrollPhysics(),
                       children: [
@@ -608,7 +608,7 @@ class _HomePageState extends State<HomePage> {
                   ),
                   const SizedBox(height: 24),
                   Text(
-                    'Your records',
+                    'Your Paw records',
                     style: Theme.of(context).textTheme.titleLarge
                         ?.copyWith(fontWeight: FontWeight.w800),
                   ),
@@ -681,10 +681,10 @@ class _WelcomePanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.all(20),
+    padding: const EdgeInsets.all(14),
     decoration: BoxDecoration(
       color: const Color(0xff1c6b5a),
-      borderRadius: BorderRadius.circular(20),
+      borderRadius: BorderRadius.circular(14),
     ),
     child: Row(
       children: [
@@ -696,26 +696,33 @@ class _WelcomePanel extends StatelessWidget {
                 'Every pawprint matters.',
                 style: TextStyle(
                   color: Colors.white,
-                  fontSize: 21,
+                  fontSize: 17,
                   fontWeight: FontWeight.w800,
                 ),
               ),
-              SizedBox(height: 6),
+              SizedBox(height: 4),
               Text(
                 'Keep your pawfriends close, safe and connected.',
-                style: TextStyle(color: Color(0xffd2ebe1), height: 1.35),
+                style: TextStyle(
+                  color: Color(0xffd2ebe1),
+                  fontSize: 13,
+                  height: 1.25,
+                ),
               ),
             ],
           ),
         ),
-        const SizedBox(width: 12),
+        const SizedBox(width: 8),
         IconButton.filled(
           onPressed: onAddDog,
           style: IconButton.styleFrom(
+            minimumSize: const Size(40, 40),
+            maximumSize: const Size(40, 40),
+            padding: EdgeInsets.zero,
             backgroundColor: const Color(0xffe5b86d),
             foregroundColor: const Color(0xff173d36),
           ),
-          icon: const Icon(Icons.add_rounded),
+          icon: const Icon(Icons.add_rounded, size: 20),
           tooltip: 'Record a dog',
         ),
       ],
@@ -738,22 +745,22 @@ class _StatTile extends StatelessWidget {
   Widget build(BuildContext context) => Tooltip(
     message: label,
     child: Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
       decoration: BoxDecoration(
         color: color,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(12),
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           IconTheme(
-            data: const IconThemeData(size: 24, color: Color(0xff24574b)),
+            data: const IconThemeData(size: 16, color: Color(0xff24574b)),
             child: icon,
           ),
-          const SizedBox(width: 10),
+          const SizedBox(width: 6),
           Text(
             value,
-            style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w800),
+            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
           ),
         ],
       ),
@@ -766,18 +773,18 @@ class _RabiesIcon extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-    width: 24,
-    height: 24,
+    width: 16,
+    height: 16,
     alignment: Alignment.center,
     decoration: BoxDecoration(
-      border: Border.all(color: const Color(0xff24574b), width: 2),
+      border: Border.all(color: const Color(0xff24574b), width: 1.5),
       shape: BoxShape.circle,
     ),
     child: const Text(
       'R',
       style: TextStyle(
         color: Color(0xff24574b),
-        fontSize: 15,
+        fontSize: 10,
         fontWeight: FontWeight.w800,
       ),
     ),
@@ -789,18 +796,18 @@ class _SterilizedIcon extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-    width: 24,
-    height: 24,
+    width: 16,
+    height: 16,
     alignment: Alignment.center,
     decoration: BoxDecoration(
-      border: Border.all(color: const Color(0xff24574b), width: 2),
+      border: Border.all(color: const Color(0xff24574b), width: 1.5),
       shape: BoxShape.circle,
     ),
     child: const Text(
       'S',
       style: TextStyle(
         color: Color(0xff24574b),
-        fontSize: 15,
+        fontSize: 10,
         fontWeight: FontWeight.w800,
       ),
     ),
