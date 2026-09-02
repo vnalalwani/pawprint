@@ -121,20 +121,11 @@ class _LoginPageState extends State<_LoginPage> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const CircleAvatar(
-                    radius: 30,
-                    backgroundColor: Color(0xffdcefe7),
-                    child: Icon(
-                      Icons.pets_rounded,
-                      size: 32,
-                      color: Color(0xff1c6b5a),
-                    ),
-                  ),
                   const SizedBox(height: 16),
-                  Image.asset('logo.png', height: 48, fit: BoxFit.contain),
+                  Image.asset('signin.png', height: 250, fit: BoxFit.contain),
                   const SizedBox(height: 24),
                   Text(
-                    'Welcome back',
+                    'Woof woof!',
                     style: Theme.of(context).textTheme.headlineSmall
                         ?.copyWith(fontWeight: FontWeight.w800),
                   ),
@@ -142,7 +133,7 @@ class _LoginPageState extends State<_LoginPage> {
                   Text(
                     widget.configurationUnavailable
                         ? 'Sign-in is unavailable until Supabase is configured.'
-                        : 'Sign in to care for every pawprint.',
+                        : 'Sign in to care for every pawfriend.',
                     textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 24),
@@ -154,8 +145,8 @@ class _LoginPageState extends State<_LoginPage> {
                           : _signInWithGoogle,
                       icon: _signingIn
                           ? const SizedBox(
-                              width: 18,
-                              height: 18,
+                              width: 24,
+                              height: 24,
                               child: CircularProgressIndicator(strokeWidth: 2),
                             )
                           : const Icon(Icons.login_rounded),

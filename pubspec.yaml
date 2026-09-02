@@ -27,6 +27,7 @@ flutter:
   uses-material-design: true
   assets:
     - logo.png
+    - signin.png
 
 flutter_launcher_icons:
   android: true
