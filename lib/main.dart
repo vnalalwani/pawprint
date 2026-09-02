@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'config/supabase_config.dart';
@@ -19,9 +20,10 @@ Future<void> main() async {
 }
 
 class MyApp extends StatelessWidget {
-  const MyApp({super.key, this.repository});
+  const MyApp({super.key, this.repository, this.requireAuthentication = true});
 
   final DogRepository? repository;
+  final bool requireAuthentication;
 
   @override
   Widget build(BuildContext context) {
@@ -33,9 +35,172 @@ class MyApp extends StatelessWidget {
         scaffoldBackgroundColor: const Color(0xfff5f3ee),
         useMaterial3: true,
       ),
-      home: HomePage(repository: repository),
+      home: requireAuthentication
+          ? _AuthenticationGate(repository: repository)
+          : HomePage(repository: repository),
     );
   }
+}
+
+class _AuthenticationGate extends StatelessWidget {
+  const _AuthenticationGate({this.repository});
+
+  final DogRepository? repository;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!SupabaseConfig.isInitialized) {
+      return const _LoginPage(configurationUnavailable: true);
+    }
+    return StreamBuilder<AuthState>(
+      stream: Supabase.instance.client.auth.onAuthStateChange,
+      builder: (context, snapshot) {
+        final session =
+            snapshot.data?.session ??
+            Supabase.instance.client.auth.currentSession;
+        if (session == null) return const _LoginPage();
+        return HomePage(repository: repository);
+      },
+    );
+  }
+}
+
+class _LoginPage extends StatefulWidget {
+  const _LoginPage({this.configurationUnavailable = false});
+
+  final bool configurationUnavailable;
+
+  @override
+  State<_LoginPage> createState() => _LoginPageState();
+}
+
+class _LoginPageState extends State<_LoginPage> {
+  bool _signingIn = false;
+
+  Future<void> _signInWithGoogle() async {
+    if (widget.configurationUnavailable) return;
+    setState(() => _signingIn = true);
+    try {
+      await Supabase.instance.client.auth.signInWithOAuth(
+        OAuthProvider.google,
+        redirectTo: kIsWeb ? Uri.base.origin : null,
+      );
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not sign in with Google: $error')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _signingIn = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    body: Stack(
+      children: [
+        const _PawPrintBackground(),
+        Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 380),
+            child: Container(
+              margin: const EdgeInsets.all(24),
+              padding: const EdgeInsets.fromLTRB(28, 32, 28, 28),
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.94),
+                borderRadius: BorderRadius.circular(8),
+                boxShadow: const [
+                  BoxShadow(
+                    color: Color(0x220f4539),
+                    blurRadius: 28,
+                    offset: Offset(0, 12),
+                  ),
+                ],
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const CircleAvatar(
+                    radius: 30,
+                    backgroundColor: Color(0xffdcefe7),
+                    child: Icon(
+                      Icons.pets_rounded,
+                      size: 32,
+                      color: Color(0xff1c6b5a),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Image.asset('logo.png', height: 48, fit: BoxFit.contain),
+                  const SizedBox(height: 24),
+                  Text(
+                    'Welcome back',
+                    style: Theme.of(context).textTheme.headlineSmall
+                        ?.copyWith(fontWeight: FontWeight.w800),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    widget.configurationUnavailable
+                        ? 'Sign-in is unavailable until Supabase is configured.'
+                        : 'Sign in to care for every pawprint.',
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 24),
+                  SizedBox(
+                    width: double.infinity,
+                    child: FilledButton.icon(
+                      onPressed: _signingIn || widget.configurationUnavailable
+                          ? null
+                          : _signInWithGoogle,
+                      icon: _signingIn
+                          ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.login_rounded),
+                      label: Text(
+                        _signingIn
+                            ? 'Opening Google...'
+                            : 'Continue with Google',
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+class _PawPrintBackground extends StatelessWidget {
+  const _PawPrintBackground();
+
+  @override
+  Widget build(BuildContext context) => Container(
+    color: const Color(0xffedf5f0),
+    child: const Stack(
+      children: [
+        Positioned(top: 72, left: 42, child: _PawPrint(size: 52)),
+        Positioned(top: 140, right: 64, child: _PawPrint(size: 34)),
+        Positioned(bottom: 104, left: 78, child: _PawPrint(size: 38)),
+        Positioned(bottom: 42, right: 34, child: _PawPrint(size: 58)),
+      ],
+    ),
+  );
+}
+
+class _PawPrint extends StatelessWidget {
+  const _PawPrint({required this.size});
+
+  final double size;
+
+  @override
+  Widget build(BuildContext context) =>
+      Icon(Icons.pets_rounded, size: size, color: const Color(0xffbddbcf));
 }
 
 class HomePage extends StatefulWidget {
@@ -59,6 +224,39 @@ class _HomePageState extends State<HomePage> {
   String? _filterGender;
   bool _filterOngoingMedical = false;
   Set<String> _dogIdsWithOngoingMedicalNotes = {};
+
+  User? get _currentUser => SupabaseConfig.isInitialized
+      ? Supabase.instance.client.auth.currentUser
+      : null;
+
+  String get _profileName {
+    final user = _currentUser;
+    final metadata = user?.userMetadata;
+    return metadata?['full_name'] as String? ??
+        metadata?['name'] as String? ??
+        user?.email ??
+        'Signed in user';
+  }
+
+  String get _profileInitials {
+    final words = _profileName.trim().split(RegExp(r'\s+'));
+    if (words.length > 1) {
+      return '${words.first[0]}${words.last[0]}'.toUpperCase();
+    }
+    final name = words.first;
+    return name.substring(0, name.length < 2 ? name.length : 2).toUpperCase();
+  }
+
+  Future<void> _signOut() async {
+    try {
+      await Supabase.instance.client.auth.signOut();
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Could not log out: $error')));
+      }
+    }
+  }
 
   @override
   void initState() {
@@ -104,7 +302,7 @@ class _HomePageState extends State<HomePage> {
     );
     if (draft == null || _repository == null) return;
     try {
-      final savedDog = await _repository!.saveDog(draft.dog);
+      final savedDog = await _repository!.saveDog(draft.dog, isNew: true);
       await _repository!.saveHealthDetails(draft.healthDetails);
       for (final note in draft.medicalNotes) {
         await _repository!.saveMedicalNote(note);
@@ -309,6 +507,56 @@ class _HomePageState extends State<HomePage> {
             fit: BoxFit.contain,
           ),
         ),
+        actions: [
+          if (_currentUser != null)
+            PopupMenuButton<String>(
+              tooltip: 'Account',
+              onSelected: (value) {
+                if (value == 'logout') _signOut();
+              },
+              itemBuilder: (context) => [
+                PopupMenuItem<String>(
+                  enabled: false,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        _profileName,
+                        style: const TextStyle(fontWeight: FontWeight.w700),
+                      ),
+                      if (_currentUser!.email != null)
+                        Text(
+                          _currentUser!.email!,
+                          style: const TextStyle(fontSize: 12),
+                        ),
+                    ],
+                  ),
+                ),
+                const PopupMenuDivider(),
+                const PopupMenuItem<String>(
+                  value: 'logout',
+                  child: ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: Icon(Icons.logout_rounded),
+                    title: Text('Log out'),
+                  ),
+                ),
+              ],
+              child: Padding(
+                padding: const EdgeInsets.only(right: 16),
+                child: CircleAvatar(
+                  backgroundColor: const Color(0xffe5b86d),
+                  child: Text(
+                    _profileInitials,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xff4e3515),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+        ],
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
@@ -893,6 +1141,7 @@ class _DogDetailsPageState extends State<_DogDetailsPage> {
             values: [
               _DetailValue('Created', _formatDate(dog.createdAt)),
               _DetailValue('Last Updated', _formatDate(dog.updatedAt)),
+              _DetailValue('Recorded by', _display(dog.recordedBy)),
             ],
           ),
         ],

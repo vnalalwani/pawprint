@@ -111,7 +111,13 @@ class DogRepository {
     } else if (path.startsWith('http')) {
       return path;
     }
-    return _client.storage.from(_photoBucket).createSignedUrl(path, 3600);
+    try {
+      return await _client.storage
+          .from(_photoBucket)
+          .createSignedUrl(path, 3600);
+    } on StorageException {
+      return null;
+    }
   }
 
   Future<Dog?> dogById(String id) async {
@@ -126,8 +132,14 @@ class DogRepository {
     return _dogFromSupabase(row, health: healthByDogId[id]);
   }
 
-  Future<Dog> saveDog(Dog dog) async {
+  Future<Dog> saveDog(Dog dog, {bool isNew = false}) async {
     _requireConnection();
+    final user = _client.auth.currentUser;
+    final metadata = user?.userMetadata;
+    final username =
+        metadata?['full_name'] as String? ??
+        metadata?['name'] as String? ??
+        user?.email;
     final record = <String, Object?>{
       'id': dog.id,
       'animal_category': dog.animalCategory,
@@ -144,6 +156,10 @@ class DogRepository {
       'longitude': dog.longitude,
       'created_date': dog.createdAt.toIso8601String(),
       'updated_date': dog.updatedAt.toIso8601String(),
+      if (username != null && username.isNotEmpty) ...{
+        if (isNew) 'added_by': username,
+        'updated_by': username,
+      },
     };
     final savedRecord = await _client
         .from('primary_dog_details')

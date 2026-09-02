@@ -27,6 +27,7 @@ class Dog {
     this.address = '',
     this.area = '',
     this.notes = '',
+    this.recordedBy = '',
     required this.createdAt,
     required this.updatedAt,
   });
@@ -54,6 +55,7 @@ class Dog {
   final String address;
   final String area;
   final String notes;
+  final String recordedBy;
   final DateTime createdAt;
   final DateTime updatedAt;
 
@@ -99,6 +101,7 @@ class Dog {
     String? color,
     String? address,
     String? area,
+    String? recordedBy,
   }) {
     return Dog(
       id: id,
@@ -126,6 +129,7 @@ class Dog {
       color: color ?? this.color,
       address: address ?? this.address,
       area: area ?? this.area,
+      recordedBy: recordedBy ?? this.recordedBy,
       createdAt: createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
     );
@@ -156,6 +160,7 @@ class Dog {
     'color': color,
     'address': address,
     'area': area,
+    'recordedBy': recordedBy,
   };
 
   factory Dog.fromMap(Map<String, Object?> map) {
@@ -191,6 +196,7 @@ class Dog {
       color: (map['color'] as String?) ?? '',
       address: (map['address'] as String?) ?? '',
       area: (map['area'] as String?) ?? '',
+      recordedBy: (map['recordedBy'] as String?) ?? '',
     );
   }
 }
