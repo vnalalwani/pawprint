@@ -95,6 +95,7 @@ class DogRepository {
       address: (row['address'] as String?) ?? '',
       locationNote: (row['address'] as String?) ?? '',
       area: (row['area'] as String?) ?? '',
+      recordedBy: (row['added_by'] as String?) ?? '',
       latitude: (row['latitude'] as num?)?.toDouble(),
       longitude: (row['longitude'] as num?)?.toDouble(),
       createdAt: createdDate,
@@ -189,6 +190,7 @@ class DogRepository {
       identification: (savedRecord['tag_id'] as String?) ?? '',
       photoPath: photoPath,
       photoBytes: null,
+      recordedBy: isNew && username != null ? username : dog.recordedBy,
     );
   }
 

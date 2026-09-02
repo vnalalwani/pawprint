@@ -28,7 +28,7 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'pawhere',
+      title: 'Tail tail everywhere!!',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xff1c6b5a)),
@@ -669,7 +669,7 @@ class _HomePageState extends State<HomePage> {
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _addDog,
         icon: const Icon(Icons.add_rounded),
-        label: const Text('Record a furfriend'),
+        label: const Text('Record your pawfriend'),
       ),
     );
   }
@@ -854,26 +854,9 @@ class _DogTile extends StatelessWidget {
                 : _photoPlaceholder(context),
           ),
         ),
-        title: Row(
-          children: [
-            Expanded(
-              child: Text(
-                dog.name.isEmpty ? 'Unnamed ${dog.animalCategory}' : dog.name,
-                style: const TextStyle(fontWeight: FontWeight.w700),
-              ),
-            ),
-            if (isHealthy) ...[
-              const Tooltip(
-                message:
-                    'Sterilized, fully vaccinated, and no ongoing treatment',
-                child: Icon(
-                  Icons.favorite_rounded,
-                  color: Color.fromARGB(255, 1, 240, 100),
-                ),
-              ),
-              const SizedBox(width: 6),
-            ],
-          ],
+        title: Text(
+          dog.name.isEmpty ? 'Unnamed ${dog.animalCategory}' : dog.name,
+          style: const TextStyle(fontWeight: FontWeight.w700),
         ),
         subtitle: Text(
           'Tag ID: ${dog.identification.isEmpty ? 'not set' : dog.identification}',
@@ -881,6 +864,22 @@ class _DogTile extends StatelessWidget {
         trailing: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
+            if (isHealthy) ...[
+              const Tooltip(
+                message: 'Sterilized, fully vaccinated, and healthy',
+                child: SizedBox(
+                  width: 40,
+                  height: 40,
+                  child: Center(
+                    child: Icon(
+                      Icons.favorite_rounded,
+                      color: Color(0xff16b364),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 4),
+            ],
             if (dog.sterilization != SterilizationStatus.yes) ...[
               const Tooltip(
                 message: 'Not sterilized',
@@ -1032,7 +1031,7 @@ class _DogDetailsPageState extends State<_DogDetailsPage> {
     final hasPhoto = dog.photoPath?.startsWith('http') ?? false;
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Dog details'),
+        title: const Text('Your Pawfriend'),
         backgroundColor: const Color(0xfff5f3ee),
       ),
       body: ListView(
@@ -2006,7 +2005,7 @@ class _AddDogDialogState extends State<_AddDogDialog> {
   Widget build(BuildContext context) {
     final dialogHeight = MediaQuery.sizeOf(context).height * 0.7;
     return AlertDialog(
-      title: Text(_page == 0 ? 'Record a furfriend' : 'Health details'),
+      title: Text(_page == 0 ? 'Record your pawfriend' : 'Health details'),
       content: SizedBox(
         width: 320,
         height: dialogHeight,

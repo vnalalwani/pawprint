@@ -9,13 +9,15 @@ void main() {
     WidgetTester tester,
   ) async {
     final repository = await DogRepository.open();
-    await tester.pumpWidget(MyApp(repository: repository));
+    await tester.pumpWidget(
+      MyApp(repository: repository, requireAuthentication: false),
+    );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Record a furfriend'));
+    await tester.tap(find.text('Record your pawfriend'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Record a furfriend'), findsAtLeastNWidgets(2));
+    expect(find.text('Record your pawfriend'), findsAtLeastNWidgets(2));
     expect(find.text('Breed'), findsOneWidget);
     expect(find.text('Color / Identifying marks'), findsOneWidget);
     expect(find.text('Tag ID'), findsNothing);
