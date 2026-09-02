@@ -8,7 +8,7 @@
         android:label="Tail tail everywhere!"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher"
-        android:description="A little place for the love and care of our pawfriends!">
+        >
         <activity
             android:name=".MainActivity"
             android:exported="true"
