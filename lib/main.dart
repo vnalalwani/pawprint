@@ -1,7 +1,5 @@
 import 'package:flutter/foundation.dart';
 
-import 'dart:typed_data';
-
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:image_picker/image_picker.dart';
@@ -102,6 +100,9 @@ class _HomePageState extends State<HomePage> {
     try {
       final savedDog = await _repository!.saveDog(draft.dog);
       await _repository!.saveHealthDetails(draft.healthDetails);
+      for (final note in draft.medicalNotes) {
+        await _repository!.saveMedicalNote(note);
+      }
       if (mounted) setState(() => _dogs = [savedDog, ..._dogs]);
     } catch (error) {
       if (!mounted) return;
@@ -112,14 +113,38 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<void> _editDog(Dog dog) async {
+    if (_repository == null) return;
+    List<MedicalNote> existingMedicalNotes = [];
+    try {
+      existingMedicalNotes = await _repository!.medicalNotesFor(dog.id);
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not load medical notes: $error')),
+        );
+      }
+      return;
+    }
     final draft = await showDialog<_DogRecordDraft>(
       context: context,
-      builder: (_) => _AddDogDialog(dog: dog),
+      builder: (_) =>
+          _AddDogDialog(dog: dog, medicalNotes: existingMedicalNotes),
     );
-    if (draft == null || _repository == null) return;
+    if (draft == null) return;
     try {
       final savedDog = await _repository!.saveDog(draft.dog);
       await _repository!.saveHealthDetails(draft.healthDetails);
+      for (final note in draft.medicalNotes) {
+        await _repository!.saveMedicalNote(note);
+      }
+      final remainingNoteIds = draft.medicalNotes
+          .map((note) => note.id)
+          .toSet();
+      for (final note in existingMedicalNotes) {
+        if (!remainingNoteIds.contains(note.id)) {
+          await _repository!.deleteMedicalNote(note.id);
+        }
+      }
       if (!mounted) return;
       setState(() {
         _dogs = _dogs
@@ -626,6 +651,62 @@ class _DogDetailsPageState extends State<_DogDetailsPage> {
     }
   }
 
+  Future<void> _editMedicalNote(int index) async {
+    final existing = _medicalNotes[index];
+    final edited = await showDialog<MedicalNote>(
+      context: context,
+      builder: (_) => _MedicalNoteDialog(dogId: dog.id, note: existing),
+    );
+    if (edited == null) return;
+    try {
+      await widget.repository.saveMedicalNote(edited);
+      if (!mounted) return;
+      setState(() => _medicalNotes[index] = edited);
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not update medical note: $error')),
+      );
+    }
+  }
+
+  Future<void> _deleteMedicalNote(int index) async {
+    final note = _medicalNotes[index];
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Delete medical condition'),
+        content: const Text(
+          'This will permanently delete the medical condition.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    try {
+      await widget.repository.deleteMedicalNote(note.id);
+      if (!mounted) return;
+      setState(() => _medicalNotes.removeAt(index));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Medical condition deleted')),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not delete medical condition: $error')),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final hasPhoto = dog.photoPath?.startsWith('http') ?? false;
@@ -687,6 +768,8 @@ class _DogDetailsPageState extends State<_DogDetailsPage> {
             notes: _medicalNotes,
             loading: _loadingMedicalNotes,
             onAdd: _addMedicalNote,
+            onEdit: _editMedicalNote,
+            onDelete: _deleteMedicalNote,
           ),
           if (dog.hasLocation)
             Padding(
@@ -784,11 +867,15 @@ class _MedicalNotesSection extends StatelessWidget {
     required this.notes,
     required this.loading,
     required this.onAdd,
+    required this.onEdit,
+    required this.onDelete,
   });
 
   final List<MedicalNote> notes;
   final bool loading;
   final VoidCallback onAdd;
+  final void Function(int index) onEdit;
+  final void Function(int index) onDelete;
 
   @override
   Widget build(BuildContext context) => Container(
@@ -830,42 +917,54 @@ class _MedicalNotesSection extends StatelessWidget {
             child: Text('No medical conditions recorded.'),
           )
         else
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: DataTable(
-              columnSpacing: 20,
-              headingTextStyle: const TextStyle(fontWeight: FontWeight.w700),
-              columns: const [
-                DataColumn(label: Text('Condition')),
-                DataColumn(label: Text('Status')),
-                DataColumn(label: Text('Treatment Given')),
-                DataColumn(label: Text('Started')),
-                DataColumn(label: Text('End Date')),
-                DataColumn(label: Text('Caretaker')),
-                DataColumn(label: Text('Vet Details')),
-              ],
-              rows: notes
-                  .map(
-                    (note) => DataRow(
-                      cells: [
-                        DataCell(Text(note.condition)),
-                        DataCell(Text(note.treatmentStatus)),
-                        DataCell(Text(note.treatmentGiven)),
-                        DataCell(Text(_formatDate(note.startedDate))),
-                        DataCell(
-                          Text(
-                            note.endDate == null
-                                ? '-'
-                                : _formatDate(note.endDate!),
+          Column(
+            children: notes.asMap().entries.map((entry) {
+              final i = entry.key;
+              final n = entry.value;
+              return Card(
+                margin: const EdgeInsets.symmetric(vertical: 6),
+                child: Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              n.condition,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
                           ),
-                        ),
-                        DataCell(Text(note.caretaker)),
-                        DataCell(Text(note.vetDetails)),
-                      ],
-                    ),
-                  )
-                  .toList(),
-            ),
+                          IconButton(
+                            onPressed: () => onEdit(i),
+                            icon: const Icon(Icons.edit_outlined),
+                          ),
+                          IconButton(
+                            onPressed: () => onDelete(i),
+                            icon: const Icon(Icons.delete_outline),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      if (n.treatmentGiven.isNotEmpty)
+                        Text('Treatment: ${n.treatmentGiven}'),
+                      if (n.caretaker.isNotEmpty)
+                        Text('Caretaker: ${n.caretaker}'),
+                      if (n.vetDetails.isNotEmpty) Text('Vet: ${n.vetDetails}'),
+                      Text(
+                        'Started: ${_MedicalNotesSection._formatDate(n.startedDate)}',
+                      ),
+                      Text(
+                        'End: ${n.endDate == null ? '-' : _MedicalNotesSection._formatDate(n.endDate!)}',
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            }).toList(),
           ),
       ],
     ),
@@ -876,9 +975,10 @@ class _MedicalNotesSection extends StatelessWidget {
 }
 
 class _MedicalNoteDialog extends StatefulWidget {
-  const _MedicalNoteDialog({required this.dogId});
+  const _MedicalNoteDialog({required this.dogId, this.note});
 
   final String dogId;
+  final MedicalNote? note;
 
   @override
   State<_MedicalNoteDialog> createState() => _MedicalNoteDialogState();
@@ -893,6 +993,23 @@ class _MedicalNoteDialogState extends State<_MedicalNoteDialog> {
   final _vetDetails = TextEditingController();
   DateTime _startedDate = DateTime.now();
   DateTime? _endDate;
+  String? _existingId;
+
+  @override
+  void initState() {
+    super.initState();
+    final note = widget.note;
+    if (note != null) {
+      _existingId = note.id;
+      _condition.text = note.condition;
+      _treatmentStatus.text = note.treatmentStatus;
+      _treatmentGiven.text = note.treatmentGiven;
+      _caretaker.text = note.caretaker;
+      _vetDetails.text = note.vetDetails;
+      _startedDate = note.startedDate;
+      _endDate = note.endDate;
+    }
+  }
 
   @override
   void dispose() {
@@ -929,7 +1046,7 @@ class _MedicalNoteDialogState extends State<_MedicalNoteDialog> {
     Navigator.pop(
       context,
       MedicalNote(
-        id: DogRepository.newId(),
+        id: _existingId ?? DogRepository.newId(),
         dogId: widget.dogId,
         condition: _condition.text.trim(),
         treatmentStatus: _treatmentStatus.text.trim(),
@@ -1021,6 +1138,124 @@ class _MedicalNoteDialogState extends State<_MedicalNoteDialog> {
       FilledButton(onPressed: _save, child: const Text('Add Note')),
     ],
   );
+}
+
+class _ManageMedicalNotesPage extends StatefulWidget {
+  const _ManageMedicalNotesPage({required this.dogId, required this.notes});
+
+  final String dogId;
+  final List<MedicalNote> notes;
+
+  @override
+  State<_ManageMedicalNotesPage> createState() =>
+      _ManageMedicalNotesPageState();
+}
+
+class _ManageMedicalNotesPageState extends State<_ManageMedicalNotesPage> {
+  late List<MedicalNote> _notes;
+
+  @override
+  void initState() {
+    super.initState();
+    _notes = List<MedicalNote>.from(widget.notes);
+  }
+
+  Future<void> _addNote() async {
+    final note = await showDialog<MedicalNote>(
+      context: context,
+      builder: (_) => _MedicalNoteDialog(dogId: widget.dogId),
+    );
+    if (note == null) return;
+    setState(() => _notes.insert(0, note));
+  }
+
+  Future<void> _editNote(int index) async {
+    final existing = _notes[index];
+    final edited = await showDialog<MedicalNote>(
+      context: context,
+      builder: (_) => _MedicalNoteDialog(dogId: widget.dogId, note: existing),
+    );
+    if (edited == null) return;
+    setState(() => _notes[index] = edited);
+  }
+
+  Future<void> _removeNote(int index) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Remove medical note'),
+        content: const Text('Remove this medical note from the draft?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Remove'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    setState(() => _notes.removeAt(index));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Ongoing treatments'),
+        backgroundColor: const Color(0xfff5f3ee),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, _notes),
+            child: const Text('Done'),
+          ),
+        ],
+      ),
+      body: Padding(
+        padding: const EdgeInsets.all(16),
+        child: _notes.isEmpty
+            ? Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [const Text('No medical notes. Tap + to add.')],
+              )
+            : ListView.builder(
+                itemCount: _notes.length,
+                itemBuilder: (context, i) {
+                  final n = _notes[i];
+                  return Card(
+                    margin: const EdgeInsets.symmetric(vertical: 6),
+                    child: ListTile(
+                      title: Text(n.condition),
+                      subtitle: Text(
+                        _MedicalNotesSection._formatDate(n.startedDate),
+                      ),
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          IconButton(
+                            onPressed: () => _editNote(i),
+                            icon: const Icon(Icons.edit_outlined),
+                          ),
+                          IconButton(
+                            onPressed: () => _removeNote(i),
+                            icon: const Icon(Icons.delete_outline),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              ),
+      ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: _addNote,
+        child: const Icon(Icons.add_rounded),
+      ),
+    );
+  }
 }
 
 class _DetailValue {
@@ -1236,9 +1471,10 @@ class _EmptyState extends StatelessWidget {
 }
 
 class _AddDogDialog extends StatefulWidget {
-  const _AddDogDialog({this.dog});
+  const _AddDogDialog({this.dog, this.medicalNotes = const []});
 
   final Dog? dog;
+  final List<MedicalNote> medicalNotes;
 
   @override
   State<_AddDogDialog> createState() => _AddDogDialogState();
@@ -1266,6 +1502,8 @@ class _AddDogDialogState extends State<_AddDogDialog> {
   bool _rabies = false;
   bool _nineInOne = false;
   DateTime? _vaccinationDate;
+  final List<MedicalNote> _draftMedicalNotes = [];
+  late final String _draftDogId;
 
   @override
   void initState() {
@@ -1273,8 +1511,10 @@ class _AddDogDialogState extends State<_AddDogDialog> {
     final dog = widget.dog;
     if (dog == null) {
       _breed.text = 'Indie';
+      _draftDogId = DogRepository.newId();
       return;
     }
+    _draftMedicalNotes.addAll(widget.medicalNotes);
     _animalCategory = dog.animalCategory;
     _name.text = dog.name;
     _breed.text = dog.breed;
@@ -1293,6 +1533,26 @@ class _AddDogDialogState extends State<_AddDogDialog> {
     _rabies = dog.rabiesVaccinated;
     _nineInOne = dog.nineInOneVaccinated;
     _vaccinationDate = dog.vaccinationDate;
+    _draftDogId = dog.id;
+  }
+
+  Future<void> _openManageMedicalNotes() async {
+    final updated = await Navigator.push<List<MedicalNote>>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => _ManageMedicalNotesPage(
+          dogId: _draftDogId,
+          notes: List<MedicalNote>.from(_draftMedicalNotes),
+        ),
+      ),
+    );
+    if (updated != null && mounted) {
+      setState(() {
+        _draftMedicalNotes
+          ..clear()
+          ..addAll(updated);
+      });
+    }
   }
 
   @override
@@ -1385,7 +1645,7 @@ class _AddDogDialogState extends State<_AddDogDialog> {
       return;
     }
     final now = DateTime.now();
-    final recordId = widget.dog?.id ?? DogRepository.newId();
+    final recordId = _draftDogId;
     Navigator.pop(
       context,
       _DogRecordDraft(
@@ -1416,6 +1676,7 @@ class _AddDogDialogState extends State<_AddDogDialog> {
           nineInOne: _nineInOne,
           vaccinationDate: _vaccinationDate,
         ),
+        medicalNotes: List<MedicalNote>.unmodifiable(_draftMedicalNotes),
       ),
     );
   }
@@ -1633,6 +1894,8 @@ class _AddDogDialogState extends State<_AddDogDialog> {
                       setState(() => _nineInOne = value);
                     },
                     onSelectDate: _selectVaccinationDate,
+                    medicalNotes: _draftMedicalNotes,
+                    onManageMedicalNotes: _openManageMedicalNotes,
                   ),
           ),
         ),
@@ -1663,10 +1926,15 @@ class _AddDogDialogState extends State<_AddDogDialog> {
 }
 
 class _DogRecordDraft {
-  const _DogRecordDraft({required this.dog, required this.healthDetails});
+  const _DogRecordDraft({
+    required this.dog,
+    required this.healthDetails,
+    required this.medicalNotes,
+  });
 
   final Dog dog;
   final DogHealthDetails healthDetails;
+  final List<MedicalNote> medicalNotes;
 }
 
 class _HealthDetailsPage extends StatelessWidget {
@@ -1679,6 +1947,8 @@ class _HealthDetailsPage extends StatelessWidget {
     required this.onRabiesChanged,
     required this.onNineInOneChanged,
     required this.onSelectDate,
+    required this.medicalNotes,
+    required this.onManageMedicalNotes,
   });
 
   final SterilizationStatus sterilization;
@@ -1689,6 +1959,8 @@ class _HealthDetailsPage extends StatelessWidget {
   final ValueChanged<bool> onRabiesChanged;
   final ValueChanged<bool> onNineInOneChanged;
   final VoidCallback onSelectDate;
+  final List<MedicalNote> medicalNotes;
+  final VoidCallback onManageMedicalNotes;
 
   @override
   Widget build(BuildContext context) => Column(
@@ -1733,6 +2005,86 @@ class _HealthDetailsPage extends StatelessWidget {
           ),
         ),
       ],
+      const SizedBox(height: 8),
+      _DraftMedicalNotesSection(
+        notes: medicalNotes,
+        onManage: onManageMedicalNotes,
+      ),
     ],
+  );
+}
+
+class _DraftMedicalNotesSection extends StatelessWidget {
+  const _DraftMedicalNotesSection({
+    required this.notes,
+    required this.onManage,
+  });
+
+  final List<MedicalNote> notes;
+  final VoidCallback onManage;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.all(12),
+    decoration: BoxDecoration(
+      color: const Color(0xfff0f6f2),
+      border: Border.all(color: const Color(0xffd6dfd8)),
+      borderRadius: BorderRadius.circular(8),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            const Expanded(
+              child: Text(
+                'Medical Notes',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+              ),
+            ),
+            IconButton.filledTonal(
+              onPressed: onManage,
+              icon: const Icon(Icons.add_rounded),
+              tooltip: 'Add or manage medical notes',
+            ),
+          ],
+        ),
+        if (notes.isEmpty)
+          const Padding(
+            padding: EdgeInsets.only(top: 8),
+            child: Text('No medical conditions recorded.'),
+          )
+        else
+          ...notes.map(
+            (note) => Padding(
+              padding: const EdgeInsets.only(top: 10),
+              child: InkWell(
+                onTap: onManage,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      note.condition,
+                      style: const TextStyle(fontWeight: FontWeight.w700),
+                    ),
+                    if (note.treatmentGiven.isNotEmpty)
+                      Text('Treatment: ${note.treatmentGiven}'),
+                    if (note.caretaker.isNotEmpty)
+                      Text('Caretaker: ${note.caretaker}'),
+                    if (note.vetDetails.isNotEmpty)
+                      Text('Vet: ${note.vetDetails}'),
+                    Text(
+                      'Started: ${_MedicalNotesSection._formatDate(note.startedDate)}',
+                    ),
+                    Text(
+                      'End: ${note.endDate == null ? '-' : _MedicalNotesSection._formatDate(note.endDate!)}',
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+      ],
+    ),
   );
 }

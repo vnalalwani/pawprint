@@ -195,28 +195,33 @@ class DogRepository {
 
   Future<List<MedicalNote>> medicalNotesFor(String dogId) async {
     _requireConnection();
-    final rows = await _client
-        .from('medical_notes')
-        .select()
-        .eq('dog_id', dogId)
-        .order('started_date', ascending: false);
-    return rows
-        .map(
-          (row) => MedicalNote(
-            id: row['id'] as String,
-            dogId: row['dog_id'] as String,
-            condition: row['medical_condition'] as String,
-            treatmentStatus: row['treatment_status'] as String,
-            treatmentGiven: (row['treatment_given'] as String?) ?? '',
-            startedDate: DateTime.parse(row['started_date'] as String),
-            endDate: row['end_date'] == null
-                ? null
-                : DateTime.parse(row['end_date'] as String),
-            caretaker: (row['caretaker'] as String?) ?? '',
-            vetDetails: (row['vet_details'] as String?) ?? '',
-          ),
-        )
-        .toList();
+    try {
+      final rows = await _client
+          .from('medical_notes')
+          .select()
+          .eq('dog_id', dogId)
+          .order('started_date', ascending: false);
+      return rows
+          .map(
+            (row) => MedicalNote(
+              id: row['id'] as String,
+              dogId: row['dog_id'] as String,
+              condition: row['medical_condition'] as String,
+              treatmentStatus: row['treatment_status'] as String,
+              treatmentGiven: (row['treatment_given'] as String?) ?? '',
+              startedDate: DateTime.parse(row['started_date'] as String),
+              endDate: row['end_date'] == null
+                  ? null
+                  : DateTime.parse(row['end_date'] as String),
+              caretaker: (row['caretaker'] as String?) ?? '',
+              vetDetails: (row['vet_details'] as String?) ?? '',
+            ),
+          )
+          .toList();
+    } on PostgrestException {
+      // Table may not exist or access denied; return empty to keep UI usable.
+      return [];
+    }
   }
 
   Future<void> saveMedicalNote(MedicalNote note) async {
@@ -232,6 +237,11 @@ class DogRepository {
       'caretaker': note.caretaker,
       'vet_details': note.vetDetails,
     }, onConflict: 'id');
+  }
+
+  Future<void> deleteMedicalNote(String id) async {
+    _requireConnection();
+    await _client.from('medical_notes').delete().eq('id', id);
   }
 
   Future<String> savePhotoBytes(Uint8List bytes) async {
