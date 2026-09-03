@@ -33,3 +33,4 @@ flutter_launcher_icons:
   android: true
   ios: true
   image_path: "web/favicon.png"
+  remove_alpha_ios: true
