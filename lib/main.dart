@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
-
+import 'package:csv/csv.dart';
+import 'package:universal_html/html.dart' as html;
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:image_picker/image_picker.dart';
@@ -487,6 +488,75 @@ class _HomePageState extends State<HomePage> {
     });
   }
 
+  Future<void> _exportFilteredDogs(List<Dog> dogs) async {
+    if (dogs.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('There are no records to export.')),
+      );
+      return;
+    }
+
+    final rows = <List<dynamic>>[
+      [
+        'Animal category',
+        'Name',
+        'Gender',
+        'Age',
+        'Color',
+        'Area/Building',
+        'Sterilized',
+        'Rabies Vaccinated',
+        '9-in-1 Vaccinated',
+        'Ongoing Medical Condition',
+        'Notes',
+        'Recorded By',
+        'Created',
+        'Last Updated',
+      ],
+    ];
+
+    for (final dog in dogs) {
+      final hasOngoingMedical = _dogIdsWithOngoingMedicalNotes.contains(dog.id);
+
+      rows.add([
+        dog.animalCategory,
+        dog.name,
+        dog.gender ?? '',
+        dog.age ?? '',
+        dog.color ?? '',
+        dog.area ?? '',
+        dog.sterilization == SterilizationStatus.yes ? 'Yes' : 'No',
+        dog.rabiesVaccinated ? 'Yes' : 'No',
+        dog.nineInOneVaccinated ? 'Yes' : 'No',
+        hasOngoingMedical ? 'Yes' : 'No',
+        dog.notes ?? '',
+        dog.recordedBy ?? '',
+        dog.createdAt.toIso8601String(),
+        dog.updatedAt.toIso8601String(),
+      ]);
+    }
+
+    final csv = const ListToCsvConverter().convert(rows);
+
+    final bytes = html.Blob([csv], 'text/csv;charset=utf-8');
+
+    final url = html.Url.createObjectUrlFromBlob(bytes);
+
+    final anchor = html.AnchorElement(href: url)
+      ..setAttribute('download', 'paw_records_${DateTime.now()}.csv')
+      ..click();
+
+    html.Url.revokeObjectUrl(url);
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('${dogs.length} records exported successfully.'),
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final visibleDogs = _dogs.where((dog) {
@@ -651,7 +721,9 @@ class _HomePageState extends State<HomePage> {
                           ),
                         ),
                       ),
+
                       const SizedBox(width: 8),
+
                       Badge(
                         isLabelVisible: hasActiveFilters,
                         child: IconButton.filledTonal(
@@ -659,6 +731,16 @@ class _HomePageState extends State<HomePage> {
                           icon: const Icon(Icons.filter_list_rounded),
                           tooltip: 'Filter records',
                         ),
+                      ),
+
+                      const SizedBox(width: 6),
+
+                      IconButton.filledTonal(
+                        onPressed: visibleDogs.isEmpty
+                            ? null
+                            : () => _exportFilteredDogs(visibleDogs),
+                        icon: const Icon(Icons.download_rounded),
+                        tooltip: 'Export filtered records',
                       ),
                     ],
                   ),
