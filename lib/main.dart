@@ -1,5 +1,8 @@
 import 'package:flutter/foundation.dart';
 import 'package:csv/csv.dart';
+import 'package:http/http.dart' as http;
+import 'package:pdf/pdf.dart';
+import 'package:pdf/widgets.dart' as pw;
 import 'package:universal_html/html.dart' as html;
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
@@ -13,6 +16,36 @@ import 'data/dog_repository.dart';
 import 'models/dog.dart';
 import 'models/dog_health_details.dart';
 import 'models/medical_note.dart';
+
+String? _optimizedSupabasePhotoUrl(String? photoPath) {
+  final value = photoPath?.trim();
+  if (value == null || value.isEmpty) return null;
+
+  final uri = Uri.tryParse(value);
+  if (uri == null || !(uri.scheme == 'http' || uri.scheme == 'https')) {
+    return value;
+  }
+
+  const objectMarker = '/storage/v1/object/public/';
+  if (!uri.path.contains(objectMarker)) return value;
+
+  final renderPath = uri.path.replaceFirst(
+    objectMarker,
+    '/storage/v1/render/image/public/',
+  );
+
+  return uri
+      .replace(
+        path: renderPath,
+        queryParameters: <String, String>{
+          'width': '320',
+          'height': '320',
+          'resize': 'cover',
+          'quality': '55',
+        },
+      )
+      .toString();
+}
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -557,6 +590,296 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
+  Future<void> _exportFilteredDogsPdf(List<Dog> dogs) async {
+    if (dogs.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('There are no records to export.')),
+      );
+      return;
+    }
+
+    final generatedAt = DateTime.now();
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Preparing PDF for ${dogs.length} records...')),
+      );
+    }
+
+    // Download photographs concurrently instead of one-by-one. This makes a
+    // big difference when several records use Supabase Storage photos.
+    final photoResults = await Future.wait(
+      dogs.map((dog) async {
+        if (dog.photoBytes != null && dog.photoBytes!.isNotEmpty) {
+          return dog.photoBytes;
+        }
+        try {
+          return await _downloadPhotoBytes(dog.photoPath);
+        } catch (_) {
+          return null;
+        }
+      }),
+    );
+
+    final photosLoaded = photoResults.whereType<Uint8List>().length;
+    final document = pw.Document();
+
+    for (var index = 0; index < dogs.length; index++) {
+      final dog = dogs[index];
+      final photoBytes = photoResults[index];
+      final hasOngoingMedical = _dogIdsWithOngoingMedicalNotes.contains(dog.id);
+
+      document.addPage(
+        pw.Page(
+          pageFormat: PdfPageFormat.a4,
+          margin: const pw.EdgeInsets.all(24),
+          build: (context) {
+            final image = photoBytes == null || photoBytes.isEmpty
+                ? null
+                : pw.MemoryImage(photoBytes);
+
+            return pw.Column(
+              crossAxisAlignment: pw.CrossAxisAlignment.stretch,
+              children: [
+                pw.Row(
+                  mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                  children: [
+                    pw.Text(
+                      'PAW RECORDS',
+                      style: pw.TextStyle(
+                        fontSize: 18,
+                        fontWeight: pw.FontWeight.bold,
+                      ),
+                    ),
+                    pw.Text(
+                      _formatPdfDate(generatedAt),
+                      style: const pw.TextStyle(fontSize: 8),
+                    ),
+                  ],
+                ),
+                pw.SizedBox(height: 8),
+                pw.Divider(),
+                pw.SizedBox(height: 10),
+
+                // Smaller photo box keeps the PDF compact and faster to
+                // render while still making the animal easy to identify.
+                pw.Center(
+                  child: image == null
+                      ? pw.Container(
+                          width: 170,
+                          height: 170,
+                          alignment: pw.Alignment.center,
+                          decoration: pw.BoxDecoration(
+                            border: pw.Border.all(color: PdfColors.grey400),
+                          ),
+                          child: pw.Text(
+                            'No photo available',
+                            style: pw.TextStyle(fontSize: 10),
+                          ),
+                        )
+                      : pw.Container(
+                          width: 170,
+                          height: 170,
+                          decoration: pw.BoxDecoration(
+                            border: pw.Border.all(color: PdfColors.grey300),
+                          ),
+                          padding: const pw.EdgeInsets.all(3),
+                          child: pw.Image(image, fit: pw.BoxFit.contain),
+                        ),
+                ),
+                pw.SizedBox(height: 12),
+                pw.Text(
+                  dog.name.trim().isEmpty
+                      ? 'Unnamed ${_capitalizeAnimalCategory(dog.animalCategory)}'
+                      : dog.name,
+                  style: pw.TextStyle(
+                    fontSize: 17,
+                    fontWeight: pw.FontWeight.bold,
+                  ),
+                  textAlign: pw.TextAlign.center,
+                ),
+                pw.SizedBox(height: 3),
+                pw.Center(
+                  child: pw.Text(
+                    _capitalizeAnimalCategory(dog.animalCategory),
+                    style: const pw.TextStyle(fontSize: 9),
+                  ),
+                ),
+                pw.SizedBox(height: 12),
+                pw.Container(
+                  padding: const pw.EdgeInsets.all(9),
+                  decoration: pw.BoxDecoration(
+                    border: pw.Border.all(color: PdfColors.grey300),
+                  ),
+                  child: pw.Column(
+                    children: [
+                      _pdfDetailRow('Gender', _pdfValue(dog.gender)),
+                      _pdfDetailRow('Age', _pdfValue(dog.age)),
+                      _pdfDetailRow('Breed', _pdfValue(dog.breed)),
+                      _pdfDetailRow('Color / Marks', _pdfValue(dog.color)),
+                      _pdfDetailRow('Area', _pdfValue(dog.area)),
+                      _pdfDetailRow(
+                        'Sterilized',
+                        dog.sterilization == SterilizationStatus.yes
+                            ? 'Yes'
+                            : 'No',
+                      ),
+                      _pdfDetailRow(
+                        'Rabies',
+                        dog.rabiesVaccinated ? 'Yes' : 'No',
+                      ),
+                      _pdfDetailRow(
+                        '9-in-1',
+                        dog.nineInOneVaccinated ? 'Yes' : 'No',
+                      ),
+                      if (hasOngoingMedical)
+                        _pdfDetailRow('Medical condition', 'Ongoing'),
+                    ],
+                  ),
+                ),
+                pw.Spacer(),
+                pw.Divider(),
+                pw.SizedBox(height: 4),
+                pw.Row(
+                  mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                  children: [
+                    pw.Text(
+                      'Animal ${index + 1} of ${dogs.length}',
+                      style: const pw.TextStyle(fontSize: 8),
+                    ),
+                    pw.Text(
+                      'Generated ${_formatPdfDate(generatedAt)}',
+                      style: const pw.TextStyle(fontSize: 8),
+                    ),
+                  ],
+                ),
+              ],
+            );
+          },
+        ),
+      );
+    }
+
+    // Save only after all pages are assembled.
+    final pdfBytes = await document.save();
+    final blob = html.Blob([pdfBytes], 'application/pdf');
+    final url = html.Url.createObjectUrlFromBlob(blob);
+    final anchor = html.AnchorElement(href: url)
+      ..setAttribute(
+        'download',
+        'paw_animal_report_${_fileTimestamp(generatedAt)}.pdf',
+      )
+      ..click();
+    html.Url.revokeObjectUrl(url);
+
+    if (mounted) {
+      final photoMessage = photosLoaded == dogs.length
+          ? 'All photographs included.'
+          : '$photosLoaded of ${dogs.length} photographs included.';
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            '${dogs.length} animal records exported as PDF. $photoMessage',
+          ),
+        ),
+      );
+    }
+  }
+
+  Future<Uint8List?> _downloadPhotoBytes(String? photoPath) async {
+    final value = photoPath?.trim();
+    if (value == null || value.isEmpty) return null;
+
+    final uri = Uri.tryParse(value);
+    if (uri == null || !(uri.scheme == 'http' || uri.scheme == 'https')) {
+      return null;
+    }
+
+    // Ask Supabase Storage's Image Transformation API for a small PDF-sized
+    // image instead of downloading the original camera photo. This can reduce
+    // a multi-megapixel photo to a few hundred KB before it ever reaches the
+    // PDF generator.
+    final downloadUri = _smallSupabaseImageUri(uri);
+
+    final response = await http
+        .get(downloadUri)
+        .timeout(const Duration(seconds: 6));
+
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw Exception('Photo download failed: HTTP ${response.statusCode}.');
+    }
+
+    return Uint8List.fromList(response.bodyBytes);
+  }
+
+  Uri _smallSupabaseImageUri(Uri uri) {
+    final path = uri.path;
+    const objectMarker = '/storage/v1/object/public/';
+
+    if (!path.contains(objectMarker)) return uri;
+
+    final renderPath = path.replaceFirst(
+      objectMarker,
+      '/storage/v1/render/image/public/',
+    );
+
+    return uri.replace(
+      path: renderPath,
+      queryParameters: <String, String>{
+        'width': '500',
+        'height': '500',
+        'resize': 'contain',
+        'quality': '60',
+      },
+    );
+  }
+
+  String _pdfValue(String? value) {
+    final trimmed = value?.trim();
+    return trimmed == null || trimmed.isEmpty ? 'Not provided' : trimmed;
+  }
+
+  String _capitalizeAnimalCategory(String value) {
+    final trimmed = value.trim();
+    if (trimmed.isEmpty) return 'Animal';
+    return '${trimmed[0].toUpperCase()}${trimmed.substring(1).toLowerCase()}';
+  }
+
+  String _formatPdfDate(DateTime date) {
+    final local = date.toLocal();
+    return '${local.day.toString().padLeft(2, '0')}/'
+        '${local.month.toString().padLeft(2, '0')}/'
+        '${local.year}';
+  }
+
+  String _fileTimestamp(DateTime date) {
+    final local = date.toLocal();
+    return '${local.year}${local.month.toString().padLeft(2, '0')}'
+        '${local.day.toString().padLeft(2, '0')}_'
+        '${local.hour.toString().padLeft(2, '0')}'
+        '${local.minute.toString().padLeft(2, '0')}'
+        '${local.second.toString().padLeft(2, '0')}';
+  }
+
+  pw.Widget _pdfDetailRow(String label, String value) => pw.Padding(
+    padding: const pw.EdgeInsets.symmetric(vertical: 5),
+    child: pw.Row(
+      crossAxisAlignment: pw.CrossAxisAlignment.start,
+      children: [
+        pw.SizedBox(
+          width: 110,
+          child: pw.Text(
+            label,
+            style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold),
+          ),
+        ),
+        pw.Expanded(
+          child: pw.Text(value, style: const pw.TextStyle(fontSize: 10)),
+        ),
+      ],
+    ),
+  );
+
   @override
   Widget build(BuildContext context) {
     final visibleDogs = _dogs.where((dog) {
@@ -735,12 +1058,36 @@ class _HomePageState extends State<HomePage> {
 
                       const SizedBox(width: 6),
 
-                      IconButton.filledTonal(
-                        onPressed: visibleDogs.isEmpty
-                            ? null
-                            : () => _exportFilteredDogs(visibleDogs),
-                        icon: const Icon(Icons.download_rounded),
+                      PopupMenuButton<String>(
+                        enabled: visibleDogs.isNotEmpty,
                         tooltip: 'Export filtered records',
+                        icon: const Icon(Icons.download_rounded),
+                        onSelected: (value) {
+                          if (value == 'csv') {
+                            // Existing CSV export is intentionally unchanged.
+                            _exportFilteredDogs(visibleDogs);
+                          } else if (value == 'pdf') {
+                            _exportFilteredDogsPdf(visibleDogs);
+                          }
+                        },
+                        itemBuilder: (context) => const [
+                          PopupMenuItem<String>(
+                            value: 'csv',
+                            child: ListTile(
+                              contentPadding: EdgeInsets.zero,
+                              leading: Icon(Icons.table_chart_outlined),
+                              title: Text('Export data sheet'),
+                            ),
+                          ),
+                          PopupMenuItem<String>(
+                            value: 'pdf',
+                            child: ListTile(
+                              contentPadding: EdgeInsets.zero,
+                              leading: Icon(Icons.picture_as_pdf_outlined),
+                              title: Text('Export report with image'),
+                            ),
+                          ),
+                        ],
                       ),
                     ],
                   ),
@@ -949,10 +1296,11 @@ class _DogTile extends StatelessWidget {
           child: SizedBox(
             width: 56,
             height: 56,
-            child: dog.photoPath?.startsWith('http') ?? false
+            child: _optimizedSupabasePhotoUrl(dog.photoPath) != null
                 ? Image.network(
-                    dog.photoPath!,
+                    _optimizedSupabasePhotoUrl(dog.photoPath)!,
                     fit: BoxFit.cover,
+                    filterQuality: FilterQuality.low,
                     errorBuilder: (_, _, _) => _photoPlaceholder(context),
                   )
                 : _photoPlaceholder(context),
@@ -1132,7 +1480,8 @@ class _DogDetailsPageState extends State<_DogDetailsPage> {
 
   @override
   Widget build(BuildContext context) {
-    final hasPhoto = dog.photoPath?.startsWith('http') ?? false;
+    final optimizedPhotoUrl = _optimizedSupabasePhotoUrl(dog.photoPath);
+    final hasPhoto = optimizedPhotoUrl != null;
     return Scaffold(
       appBar: AppBar(
         title: const Text('Your Pawfriend'),
@@ -1161,8 +1510,9 @@ class _DogDetailsPageState extends State<_DogDetailsPage> {
                   height: 120,
                   child: hasPhoto
                       ? Image.network(
-                          dog.photoPath!,
+                          optimizedPhotoUrl!,
                           fit: BoxFit.cover,
+                          filterQuality: FilterQuality.medium,
                           errorBuilder: (_, _, _) =>
                               _detailPhotoPlaceholder(context),
                         )
