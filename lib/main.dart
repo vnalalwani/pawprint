@@ -79,11 +79,14 @@ class _LoginPageState extends State<_LoginPage> {
 
   Future<void> _signInWithGoogle() async {
     if (widget.configurationUnavailable) return;
+
     setState(() => _signingIn = true);
+
     try {
       await Supabase.instance.client.auth.signInWithOAuth(
         OAuthProvider.google,
-        redirectTo: kIsWeb ? Uri.base.origin : null,
+        redirectTo: kIsWeb ? Uri.base.origin : 'hellotails://login-callback/',
+        authScreenLaunchMode: LaunchMode.externalApplication,
       );
     } catch (error) {
       if (mounted) {
@@ -92,7 +95,9 @@ class _LoginPageState extends State<_LoginPage> {
         );
       }
     } finally {
-      if (mounted) setState(() => _signingIn = false);
+      if (mounted) {
+        setState(() => _signingIn = false);
+      }
     }
   }
 
