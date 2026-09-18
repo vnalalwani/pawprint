@@ -215,6 +215,7 @@ class _HomePageState extends State<HomePage> {
   bool _loading = true;
   String _query = '';
   bool _filterSterilized = false;
+  bool _filterNotSterilized = false;
   bool _filterRabies = false;
   bool _filterNineInOne = false;
   String? _filterGender;
@@ -374,11 +375,12 @@ class _HomePageState extends State<HomePage> {
 
   Future<void> _showFilters() async {
     var sterilized = _filterSterilized;
+    var notSterilized = _filterNotSterilized;
     var rabies = _filterRabies;
     var nineInOne = _filterNineInOne;
     var gender = _filterGender;
     var ongoingMedical = _filterOngoingMedical;
-    final applied = await showDialog<(bool, bool, bool, String?, bool)>(
+    final applied = await showDialog<(bool, bool, bool, bool, String?, bool)>(
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
@@ -391,6 +393,12 @@ class _HomePageState extends State<HomePage> {
                 onChanged: (value) =>
                     setDialogState(() => sterilized = value ?? false),
                 title: const Text('Sterilized'),
+              ),
+              CheckboxListTile(
+                value: notSterilized,
+                onChanged: (value) =>
+                    setDialogState(() => notSterilized = value ?? false),
+                title: const Text('Not sterilized'),
               ),
               CheckboxListTile(
                 value: rabies,
@@ -443,13 +451,20 @@ class _HomePageState extends State<HomePage> {
           ),
           actions: [
             TextButton(
-              onPressed: () =>
-                  Navigator.pop(context, (false, false, false, null, false)),
+              onPressed: () => Navigator.pop(context, (
+                false,
+                false,
+                false,
+                false,
+                null,
+                false,
+              )),
               child: const Text('Clear'),
             ),
             FilledButton(
               onPressed: () => Navigator.pop(context, (
                 sterilized,
+                notSterilized,
                 rabies,
                 nineInOne,
                 gender,
@@ -464,10 +479,11 @@ class _HomePageState extends State<HomePage> {
     if (applied == null || !mounted) return;
     setState(() {
       _filterSterilized = applied.$1;
-      _filterRabies = applied.$2;
-      _filterNineInOne = applied.$3;
-      _filterGender = applied.$4;
-      _filterOngoingMedical = applied.$5;
+      _filterNotSterilized = applied.$2;
+      _filterRabies = applied.$3;
+      _filterNineInOne = applied.$4;
+      _filterGender = applied.$5;
+      _filterOngoingMedical = applied.$6;
     });
   }
 
@@ -478,6 +494,8 @@ class _HomePageState extends State<HomePage> {
       return text.contains(_query) &&
           (!_filterSterilized ||
               dog.sterilization == SterilizationStatus.yes) &&
+          (!_filterNotSterilized ||
+              dog.sterilization != SterilizationStatus.yes) &&
           (!_filterRabies || dog.rabiesVaccinated) &&
           (!_filterNineInOne || dog.nineInOneVaccinated) &&
           (_filterGender == null || dog.gender == _filterGender) &&
@@ -486,6 +504,7 @@ class _HomePageState extends State<HomePage> {
     }).toList();
     final hasActiveFilters =
         _filterSterilized ||
+        _filterNotSterilized ||
         _filterRabies ||
         _filterNineInOne ||
         _filterGender != null ||
@@ -1439,9 +1458,8 @@ class _MedicalNoteDialogState extends State<_MedicalNoteDialog> {
               ),
               TextFormField(
                 controller: _caretaker,
-                keyboardType: TextInputType.phone,
                 decoration: const InputDecoration(
-                  labelText: 'Caretaker Name or Mobile Number',
+                  labelText: 'Caretaker Name and Mobile Number',
                 ),
               ),
               TextFormField(
