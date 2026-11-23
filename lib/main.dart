@@ -1,9 +1,11 @@
+import 'dart:convert';
+
 import 'package:flutter/foundation.dart';
 import 'package:csv/csv.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:http/http.dart' as http;
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
-import 'package:universal_html/html.dart' as html;
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:image_picker/image_picker.dart';
@@ -570,23 +572,27 @@ class _HomePageState extends State<HomePage> {
     }
 
     final csv = const ListToCsvConverter().convert(rows);
+    final fileName = 'paw_records_${_fileTimestamp(DateTime.now())}.csv';
 
-    final bytes = html.Blob([csv], 'text/csv;charset=utf-8');
-
-    final url = html.Url.createObjectUrlFromBlob(bytes);
-
-    final anchor = html.AnchorElement(href: url)
-      ..setAttribute('download', 'paw_records_${DateTime.now()}.csv')
-      ..click();
-
-    html.Url.revokeObjectUrl(url);
-
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('${dogs.length} records exported successfully.'),
-        ),
+    try {
+      final savedUri = await FilePicker.saveFile(
+        dialogTitle: 'Save Paw Records CSV',
+        fileName: fileName,
+        bytes: Uint8List.fromList(utf8.encode(csv)),
+        mimeType: 'text/csv',
+        type: FileType.custom,
+        allowedExtensions: const ['csv'],
       );
+
+      if (!mounted || savedUri == null) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('${dogs.length} records exported as CSV.')),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('CSV export failed: $error')));
     }
   }
 
@@ -762,17 +768,20 @@ class _HomePageState extends State<HomePage> {
 
     // Save only after all pages are assembled.
     final pdfBytes = await document.save();
-    final blob = html.Blob([pdfBytes], 'application/pdf');
-    final url = html.Url.createObjectUrlFromBlob(blob);
-    final anchor = html.AnchorElement(href: url)
-      ..setAttribute(
-        'download',
-        'paw_animal_report_${_fileTimestamp(generatedAt)}.pdf',
-      )
-      ..click();
-    html.Url.revokeObjectUrl(url);
+    final fileName = 'paw_animal_report_${_fileTimestamp(generatedAt)}.pdf';
 
-    if (mounted) {
+    try {
+      final savedUri = await FilePicker.saveFile(
+        dialogTitle: 'Save Paw Animal Report PDF',
+        fileName: fileName,
+        bytes: pdfBytes,
+        mimeType: 'application/pdf',
+        type: FileType.custom,
+        allowedExtensions: const ['pdf'],
+      );
+
+      if (!mounted || savedUri == null) return;
+
       final photoMessage = photosLoaded == dogs.length
           ? 'All photographs included.'
           : '$photosLoaded of ${dogs.length} photographs included.';
@@ -783,6 +792,10 @@ class _HomePageState extends State<HomePage> {
           ),
         ),
       );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('PDF export failed: $error')));
     }
   }
 
@@ -1076,7 +1089,7 @@ class _HomePageState extends State<HomePage> {
                             child: ListTile(
                               contentPadding: EdgeInsets.zero,
                               leading: Icon(Icons.table_chart_outlined),
-                              title: Text('Export data sheet'),
+                              title: Text('Export CSV'),
                             ),
                           ),
                           PopupMenuItem<String>(
@@ -1084,7 +1097,7 @@ class _HomePageState extends State<HomePage> {
                             child: ListTile(
                               contentPadding: EdgeInsets.zero,
                               leading: Icon(Icons.picture_as_pdf_outlined),
-                              title: Text('Export report with image'),
+                              title: Text('Export Animal Report (PDF)'),
                             ),
                           ),
                         ],
