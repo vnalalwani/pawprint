@@ -19,9 +19,15 @@ import 'models/dog.dart';
 import 'models/dog_health_details.dart';
 import 'models/medical_note.dart';
 
-String? _optimizedSupabasePhotoUrl(String? photoPath) {
+final Map<String, String> _optimizedPhotoUrlCache = <String, String>{};
+
+String? _optimizedSupabasePhotoUrl(String? photoPath, {int quality = 55}) {
   final value = photoPath?.trim();
   if (value == null || value.isEmpty) return null;
+
+  final cacheKey = '$value|$quality';
+  final cachedUrl = _optimizedPhotoUrlCache[cacheKey];
+  if (cachedUrl != null) return cachedUrl;
 
   final uri = Uri.tryParse(value);
   if (uri == null || !(uri.scheme == 'http' || uri.scheme == 'https')) {
@@ -36,17 +42,19 @@ String? _optimizedSupabasePhotoUrl(String? photoPath) {
     '/storage/v1/render/image/public/',
   );
 
-  return uri
+  final optimizedUrl = uri
       .replace(
         path: renderPath,
         queryParameters: <String, String>{
           'width': '320',
           'height': '320',
           'resize': 'cover',
-          'quality': '55',
+          'quality': '$quality',
         },
       )
       .toString();
+  _optimizedPhotoUrlCache[cacheKey] = optimizedUrl;
+  return optimizedUrl;
 }
 
 Future<void> main() async {
@@ -253,7 +261,8 @@ class _HomePageState extends State<HomePage> {
   bool _filterSterilized = false;
   bool _filterNotSterilized = false;
   bool _filterRabies = false;
-  bool _filterNineInOne = false;
+  bool _filterSentForSterilization = false;
+  bool _filterNotVaccinated = false;
   String? _filterGender;
   bool _filterOngoingMedical = false;
   Set<String> _dogIdsWithOngoingMedicalNotes = {};
@@ -412,8 +421,8 @@ class _HomePageState extends State<HomePage> {
   Future<void> _showFilters() async {
     var sterilized = _filterSterilized;
     var notSterilized = _filterNotSterilized;
-    var rabies = _filterRabies;
-    var nineInOne = _filterNineInOne;
+    var sentForSterilization = _filterSentForSterilization;
+    var notVaccinated = _filterNotVaccinated;
     var gender = _filterGender;
     var ongoingMedical = _filterOngoingMedical;
     final applied = await showDialog<(bool, bool, bool, bool, String?, bool)>(
@@ -437,16 +446,16 @@ class _HomePageState extends State<HomePage> {
                 title: const Text('Not sterilized'),
               ),
               CheckboxListTile(
-                value: rabies,
+                value: sentForSterilization,
                 onChanged: (value) =>
-                    setDialogState(() => rabies = value ?? false),
-                title: const Text('Rabies vaccinated'),
+                    setDialogState(() => sentForSterilization = value ?? false),
+                title: const Text('Sent for sterilization'),
               ),
               CheckboxListTile(
-                value: nineInOne,
+                value: notVaccinated,
                 onChanged: (value) =>
-                    setDialogState(() => nineInOne = value ?? false),
-                title: const Text('9-in-1 vaccinated'),
+                    setDialogState(() => notVaccinated = value ?? false),
+                title: const Text('Not vaccinated'),
               ),
               CheckboxListTile(
                 value: ongoingMedical,
@@ -501,8 +510,8 @@ class _HomePageState extends State<HomePage> {
               onPressed: () => Navigator.pop(context, (
                 sterilized,
                 notSterilized,
-                rabies,
-                nineInOne,
+                sentForSterilization,
+                notVaccinated,
                 gender,
                 ongoingMedical,
               )),
@@ -516,8 +525,8 @@ class _HomePageState extends State<HomePage> {
     setState(() {
       _filterSterilized = applied.$1;
       _filterNotSterilized = applied.$2;
-      _filterRabies = applied.$3;
-      _filterNineInOne = applied.$4;
+      _filterSentForSterilization = applied.$3;
+      _filterNotVaccinated = applied.$4;
       _filterGender = applied.$5;
       _filterOngoingMedical = applied.$6;
     });
@@ -542,6 +551,7 @@ class _HomePageState extends State<HomePage> {
         'Sterilized',
         'Rabies Vaccinated',
         '9-in-1 Vaccinated',
+        'Vaccination Date',
         'Ongoing Medical Condition',
         'Notes',
         'Recorded By',
@@ -563,6 +573,7 @@ class _HomePageState extends State<HomePage> {
         dog.sterilization == SterilizationStatus.yes ? 'Yes' : 'No',
         dog.rabiesVaccinated ? 'Yes' : 'No',
         dog.nineInOneVaccinated ? 'Yes' : 'No',
+        dog.vaccinationDate == null ? '' : _formatPdfDate(dog.vaccinationDate!),
         hasOngoingMedical ? 'Yes' : 'No',
         dog.notes ?? '',
         dog.recordedBy ?? '',
@@ -667,8 +678,7 @@ class _HomePageState extends State<HomePage> {
                 pw.Divider(),
                 pw.SizedBox(height: 10),
 
-                // Smaller photo box keeps the PDF compact and faster to
-                // render while still making the animal easy to identify.
+                // Large photo box makes the animal easy to identify in print.
                 pw.Center(
                   child: image == null
                       ? pw.Container(
@@ -697,7 +707,7 @@ class _HomePageState extends State<HomePage> {
                 pw.Text(
                   dog.name.trim().isEmpty
                       ? 'Unnamed ${_capitalizeAnimalCategory(dog.animalCategory)}'
-                      : dog.name,
+                      : _capitalizeAnimalName(dog.name),
                   style: pw.TextStyle(
                     fontSize: 17,
                     fontWeight: pw.FontWeight.bold,
@@ -737,6 +747,12 @@ class _HomePageState extends State<HomePage> {
                       _pdfDetailRow(
                         '9-in-1',
                         dog.nineInOneVaccinated ? 'Yes' : 'No',
+                      ),
+                      _pdfDetailRow(
+                        'Vaccination date',
+                        dog.vaccinationDate == null
+                            ? 'Not recorded'
+                            : _formatPdfDate(dog.vaccinationDate!),
                       ),
                       if (hasOngoingMedical)
                         _pdfDetailRow('Medical condition', 'Ongoing'),
@@ -858,6 +874,12 @@ class _HomePageState extends State<HomePage> {
     return '${trimmed[0].toUpperCase()}${trimmed.substring(1).toLowerCase()}';
   }
 
+  String _capitalizeAnimalName(String value) {
+    final trimmed = value.trim();
+    if (trimmed.isEmpty) return trimmed;
+    return '${trimmed[0].toUpperCase()}${trimmed.substring(1)}';
+  }
+
   String _formatPdfDate(DateTime date) {
     final local = date.toLocal();
     return '${local.day.toString().padLeft(2, '0')}/'
@@ -902,8 +924,10 @@ class _HomePageState extends State<HomePage> {
               dog.sterilization == SterilizationStatus.yes) &&
           (!_filterNotSterilized ||
               dog.sterilization != SterilizationStatus.yes) &&
+          (!_filterSentForSterilization || dog.sentForSterilization) &&
           (!_filterRabies || dog.rabiesVaccinated) &&
-          (!_filterNineInOne || dog.nineInOneVaccinated) &&
+          (!_filterNotVaccinated ||
+              (!dog.rabiesVaccinated && !dog.nineInOneVaccinated)) &&
           (_filterGender == null || dog.gender == _filterGender) &&
           (!_filterOngoingMedical ||
               _dogIdsWithOngoingMedicalNotes.contains(dog.id));
@@ -911,8 +935,9 @@ class _HomePageState extends State<HomePage> {
     final hasActiveFilters =
         _filterSterilized ||
         _filterNotSterilized ||
+        _filterSentForSterilization ||
+        _filterNotVaccinated ||
         _filterRabies ||
-        _filterNineInOne ||
         _filterGender != null ||
         _filterOngoingMedical;
 
@@ -1110,6 +1135,7 @@ class _HomePageState extends State<HomePage> {
                   else
                     ...visibleDogs.map(
                       (dog) => _DogTile(
+                        key: ValueKey(dog.id),
                         dog: dog,
                         repository: _repository!,
                         onEdit: () => _editDog(dog),
@@ -1273,6 +1299,7 @@ class _SterilizedIcon extends StatelessWidget {
 
 class _DogTile extends StatelessWidget {
   const _DogTile({
+    super.key,
     required this.dog,
     required this.repository,
     required this.onEdit,
@@ -1291,86 +1318,94 @@ class _DogTile extends StatelessWidget {
     final vaccinationTooltip = dog.vaccinationDueSoon
         ? 'Vaccination due within one month'
         : 'No vaccination recorded';
+    final photoUrl = _optimizedSupabasePhotoUrl(dog.photoPath, quality: 50);
 
-    return Card(
-      margin: const EdgeInsets.only(bottom: 10),
-      elevation: 0,
-      color: Colors.white,
-      child: ListTile(
-        onTap: () {
-          Navigator.of(context).push(
-            MaterialPageRoute<void>(
-              builder: (_) => _DogDetailsPage(dog: dog, repository: repository),
-            ),
-          );
-        },
-        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
-        leading: ClipOval(
-          child: SizedBox(
-            width: 56,
-            height: 56,
-            child: _optimizedSupabasePhotoUrl(dog.photoPath) != null
-                ? Image.network(
-                    _optimizedSupabasePhotoUrl(dog.photoPath)!,
-                    fit: BoxFit.cover,
-                    filterQuality: FilterQuality.low,
-                    errorBuilder: (_, _, _) => _photoPlaceholder(context),
-                  )
-                : _photoPlaceholder(context),
+    return RepaintBoundary(
+      child: Card(
+        margin: const EdgeInsets.only(bottom: 10),
+        elevation: 0,
+        color: Colors.white,
+        child: ListTile(
+          onTap: () {
+            Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                builder: (_) =>
+                    _DogDetailsPage(dog: dog, repository: repository),
+              ),
+            );
+          },
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 14,
+            vertical: 5,
           ),
-        ),
-        title: Text(
-          dog.name.isEmpty ? 'Unnamed ${dog.animalCategory}' : dog.name,
-          style: const TextStyle(fontWeight: FontWeight.w700),
-        ),
-        subtitle: Text(
-          'Tag ID: ${dog.identification.isEmpty ? 'not set' : dog.identification}',
-        ),
-        trailing: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (isHealthy) ...[
-              const Tooltip(
-                message: 'Sterilized, fully vaccinated, and healthy',
-                child: SizedBox(
-                  width: 40,
-                  height: 40,
-                  child: Center(
-                    child: Icon(
-                      Icons.favorite_rounded,
-                      color: Color(0xff16b364),
+          leading: ClipOval(
+            child: SizedBox(
+              width: 56,
+              height: 56,
+              child: photoUrl != null
+                  ? Image.network(
+                      photoUrl,
+                      fit: BoxFit.cover,
+                      filterQuality: FilterQuality.low,
+                      gaplessPlayback: true,
+                      errorBuilder: (_, _, _) => _photoPlaceholder(context),
+                    )
+                  : _photoPlaceholder(context),
+            ),
+          ),
+          title: Text(
+            dog.name.isEmpty ? 'Unnamed ${dog.animalCategory}' : dog.name,
+            style: const TextStyle(fontWeight: FontWeight.w700),
+          ),
+          subtitle: Text(
+            'Tag ID: ${dog.identification.isEmpty ? 'not set' : dog.identification}',
+          ),
+          trailing: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (isHealthy) ...[
+                const Tooltip(
+                  message: 'Sterilized, fully vaccinated, and healthy',
+                  child: SizedBox(
+                    width: 40,
+                    height: 40,
+                    child: Center(
+                      child: Icon(
+                        Icons.favorite_rounded,
+                        color: Color(0xff16b364),
+                      ),
                     ),
                   ),
                 ),
-              ),
-              const SizedBox(width: 4),
-            ],
-            if (dog.sterilization != SterilizationStatus.yes) ...[
-              const Tooltip(
-                message: 'Not sterilized',
-                child: Icon(
-                  Icons.content_cut_outlined,
-                  color: Color(0xffb54708),
+                const SizedBox(width: 4),
+              ],
+              if (dog.sterilization != SterilizationStatus.yes) ...[
+                const Tooltip(
+                  message: 'Not sterilized',
+                  child: Icon(
+                    Icons.content_cut_outlined,
+                    color: Color(0xffb54708),
+                  ),
                 ),
-              ),
-              const SizedBox(width: 8),
-            ],
-            if (vaccinationNeedsAttention) ...[
-              Tooltip(
-                message: vaccinationTooltip,
-                child: const Icon(
-                  Icons.notifications_active_outlined,
-                  color: Color(0xffb54708),
+                const SizedBox(width: 8),
+              ],
+              if (vaccinationNeedsAttention) ...[
+                Tooltip(
+                  message: vaccinationTooltip,
+                  child: const Icon(
+                    Icons.notifications_active_outlined,
+                    color: Color(0xffb54708),
+                  ),
                 ),
+                const SizedBox(width: 8),
+              ],
+              IconButton(
+                onPressed: onEdit,
+                icon: const Icon(Icons.edit_outlined),
+                tooltip: 'Edit record',
               ),
-              const SizedBox(width: 8),
             ],
-            IconButton(
-              onPressed: onEdit,
-              icon: const Icon(Icons.edit_outlined),
-              tooltip: 'Edit record',
-            ),
-          ],
+          ),
         ),
       ),
     );
@@ -1523,9 +1558,10 @@ class _DogDetailsPageState extends State<_DogDetailsPage> {
                   height: 120,
                   child: hasPhoto
                       ? Image.network(
-                          optimizedPhotoUrl!,
+                          optimizedPhotoUrl,
                           fit: BoxFit.cover,
                           filterQuality: FilterQuality.medium,
+                          gaplessPlayback: true,
                           errorBuilder: (_, _, _) =>
                               _detailPhotoPlaceholder(context),
                         )
@@ -2184,6 +2220,31 @@ class _MedicalRecordsSection extends StatelessWidget {
               ),
           ],
         ),
+        const SizedBox(height: 12),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Icon(
+              Icons.calendar_today_outlined,
+              size: 18,
+              color: Color(0xff1c6b5a),
+            ),
+            const SizedBox(width: 8),
+            const Text(
+              'Vaccination date:',
+              style: TextStyle(fontWeight: FontWeight.w600),
+            ),
+            const SizedBox(width: 6),
+            Expanded(
+              child: Text(
+                dog.vaccinationDate == null
+                    ? 'Not recorded'
+                    : MaterialLocalizations.of(context)
+                          .formatMediumDate(dog.vaccinationDate!.toLocal()),
+              ),
+            ),
+          ],
+        ),
       ],
     ),
   );
@@ -2285,6 +2346,7 @@ class _AddDogDialogState extends State<_AddDogDialog> {
   double? _latitude;
   double? _longitude;
   SterilizationStatus _sterilization = SterilizationStatus.no;
+  bool _sentForSterilization = false;
   bool _rabies = false;
   bool _nineInOne = false;
   DateTime? _vaccinationDate;
@@ -2316,6 +2378,7 @@ class _AddDogDialogState extends State<_AddDogDialog> {
     _sterilization = dog.sterilization == SterilizationStatus.unknown
         ? SterilizationStatus.no
         : dog.sterilization;
+    _sentForSterilization = dog.sentForSterilization;
     _rabies = dog.rabiesVaccinated;
     _nineInOne = dog.nineInOneVaccinated;
     _vaccinationDate = dog.vaccinationDate;
@@ -2446,6 +2509,7 @@ class _AddDogDialogState extends State<_AddDogDialog> {
           age: _age.text.trim(),
           color: _identifyingMarks.text.trim(),
           sterilization: _sterilization,
+          sentForSterilization: _sentForSterilization,
           rabiesVaccinated: _rabies,
           nineInOneVaccinated: _nineInOne,
           vaccinationDate: _vaccinationDate,
@@ -2461,6 +2525,7 @@ class _AddDogDialogState extends State<_AddDogDialog> {
         healthDetails: DogHealthDetails(
           dogId: recordId,
           sterilization: _sterilization,
+          sentForSterilization: _sentForSterilization,
           rabies: _rabies,
           nineInOne: _nineInOne,
           vaccinationDate: _vaccinationDate,
@@ -2674,11 +2739,15 @@ class _AddDogDialogState extends State<_AddDogDialog> {
                   )
                 : _HealthDetailsPage(
                     sterilization: _sterilization,
+                    sentForSterilization: _sentForSterilization,
                     rabies: _rabies,
                     nineInOne: _nineInOne,
                     vaccinationDate: _vaccinationDate,
                     onSterilizationChanged: (status) {
                       setState(() => _sterilization = status);
+                    },
+                    onSentForSterilizationChanged: (value) {
+                      setState(() => _sentForSterilization = value);
                     },
                     onRabiesChanged: (value) {
                       setState(() => _rabies = value);
@@ -2733,10 +2802,12 @@ class _DogRecordDraft {
 class _HealthDetailsPage extends StatelessWidget {
   const _HealthDetailsPage({
     required this.sterilization,
+    required this.sentForSterilization,
     required this.rabies,
     required this.nineInOne,
     required this.vaccinationDate,
     required this.onSterilizationChanged,
+    required this.onSentForSterilizationChanged,
     required this.onRabiesChanged,
     required this.onNineInOneChanged,
     required this.onSelectDate,
@@ -2745,10 +2816,12 @@ class _HealthDetailsPage extends StatelessWidget {
   });
 
   final SterilizationStatus sterilization;
+  final bool sentForSterilization;
   final bool rabies;
   final bool nineInOne;
   final DateTime? vaccinationDate;
   final ValueChanged<SterilizationStatus> onSterilizationChanged;
+  final ValueChanged<bool> onSentForSterilizationChanged;
   final ValueChanged<bool> onRabiesChanged;
   final ValueChanged<bool> onNineInOneChanged;
   final VoidCallback onSelectDate;
@@ -2771,6 +2844,12 @@ class _HealthDetailsPage extends StatelessWidget {
             RadioListTile(value: SterilizationStatus.no, title: Text('No')),
           ],
         ),
+      ),
+      CheckboxListTile(
+        contentPadding: EdgeInsets.zero,
+        title: const Text('Sent for sterilization'),
+        value: sentForSterilization,
+        onChanged: (value) => onSentForSterilizationChanged(value ?? false),
       ),
       const SizedBox(height: 12),
       CheckboxListTile(

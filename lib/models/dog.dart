@@ -15,6 +15,7 @@ class Dog {
     this.age = '',
     this.color = '',
     this.sterilization = SterilizationStatus.unknown,
+    this.sentForSterilization = false,
     this.rabiesVaccinated = false,
     this.nineInOneVaccinated = false,
     this.vaccinationDate,
@@ -43,6 +44,7 @@ class Dog {
   final String age;
   final String color;
   final SterilizationStatus sterilization;
+  final bool sentForSterilization;
   final bool rabiesVaccinated;
   final bool nineInOneVaccinated;
   final DateTime? vaccinationDate;
@@ -80,6 +82,7 @@ class Dog {
     String? identification,
     String? age,
     SterilizationStatus? sterilization,
+    bool? sentForSterilization,
     bool? rabiesVaccinated,
     bool? nineInOneVaccinated,
     DateTime? vaccinationDate,
@@ -110,6 +113,7 @@ class Dog {
       identification: identification ?? this.identification,
       age: age ?? this.age,
       sterilization: sterilization ?? this.sterilization,
+      sentForSterilization: sentForSterilization ?? this.sentForSterilization,
       rabiesVaccinated: rabiesVaccinated ?? this.rabiesVaccinated,
       nineInOneVaccinated: nineInOneVaccinated ?? this.nineInOneVaccinated,
       vaccinationDate: vaccinationDate ?? this.vaccinationDate,
@@ -142,6 +146,7 @@ class Dog {
     'identification': identification,
     'age': age,
     'sterilization': sterilization.name,
+    'sentForSterilization': sentForSterilization,
     'rabiesVaccinated': rabiesVaccinated,
     'nineInOneVaccinated': nineInOneVaccinated,
     'vaccinationDate': vaccinationDate?.toIso8601String(),
@@ -174,6 +179,7 @@ class Dog {
         (value) => value.name == map['sterilization'],
         orElse: () => SterilizationStatus.unknown,
       ),
+      sentForSterilization: (map['sentForSterilization'] as bool?) ?? false,
       rabiesVaccinated: (map['rabiesVaccinated'] as bool?) ?? false,
       nineInOneVaccinated: (map['nineInOneVaccinated'] as bool?) ?? false,
       vaccinationDate: map['vaccinationDate'] == null

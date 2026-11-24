@@ -32,6 +32,10 @@ The dog record table is defined in
 `supabase/migrations/001_primary_dog_details.sql`. Apply it with the Supabase
 CLI or run it in the Supabase SQL Editor.
 
+Apply the remaining migrations in order as well. In particular,
+`008_add_sent_for_sterilization.sql` adds the column used to save and retrieve
+the "Sent for sterilization" health detail.
+
 In the Supabase dashboard, add `treatfeedtails` under **Settings -> API ->
 Exposed schemas** so the Flutter client can reach the table.
 

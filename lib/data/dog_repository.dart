@@ -44,17 +44,13 @@ class DogRepository {
     List<String> dogIds,
   ) async {
     if (dogIds.isEmpty) return {};
-    try {
-      final rows = await _client
-          .from('sterilization_vaccination_details')
-          .select(
-            'dog_id, sterilization_status, rabies, nine_in_one, vaccination_date',
-          )
-          .inFilter('dog_id', dogIds);
-      return {for (final row in rows) row['dog_id'] as String: row};
-    } on PostgrestException {
-      return {};
-    }
+    final rows = await _client
+        .from('sterilization_vaccination_details')
+        .select(
+          'dog_id, sterilization_status, sent_for_sterilization, rabies, nine_in_one, vaccination_date',
+        )
+        .inFilter('dog_id', dogIds);
+    return {for (final row in rows) row['dog_id'] as String: row};
   }
 
   Future<Dog> _dogFromSupabase(
@@ -80,6 +76,8 @@ class DogRepository {
         (status) => status.name == health?['sterilization_status'],
         orElse: () => SterilizationStatus.unknown,
       ),
+      sentForSterilization:
+          (health?['sent_for_sterilization'] as bool?) ?? false,
       rabiesVaccinated: (health?['rabies'] as bool?) ?? false,
       nineInOneVaccinated: (health?['nine_in_one'] as bool?) ?? false,
       vaccinationDate: health?['vaccination_date'] == null
@@ -202,13 +200,21 @@ class DogRepository {
 
   Future<void> saveHealthDetails(DogHealthDetails details) async {
     _requireConnection();
-    await _client.from('sterilization_vaccination_details').upsert({
-      'dog_id': details.dogId,
-      'sterilization_status': details.sterilization.name,
-      'rabies': details.rabies,
-      'nine_in_one': details.nineInOne,
-      'vaccination_date': details.vaccinationDate?.toIso8601String(),
-    }, onConflict: 'dog_id');
+    final saved = await _client
+        .from('sterilization_vaccination_details')
+        .upsert({
+          'dog_id': details.dogId,
+          'sterilization_status': details.sterilization.name,
+          'sent_for_sterilization': details.sentForSterilization,
+          'rabies': details.rabies,
+          'nine_in_one': details.nineInOne,
+          'vaccination_date': details.vaccinationDate?.toIso8601String(),
+        }, onConflict: 'dog_id')
+        .select('sent_for_sterilization')
+        .single();
+    if (saved['sent_for_sterilization'] != details.sentForSterilization) {
+      throw StateError('Sent-for-sterilization status was not saved.');
+    }
   }
 
   Future<List<MedicalNote>> medicalNotesFor(String dogId) async {

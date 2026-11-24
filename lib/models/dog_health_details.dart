@@ -4,6 +4,7 @@ class DogHealthDetails {
   const DogHealthDetails({
     required this.dogId,
     required this.sterilization,
+    required this.sentForSterilization,
     required this.rabies,
     required this.nineInOne,
     this.vaccinationDate,
@@ -11,6 +12,7 @@ class DogHealthDetails {
 
   final String dogId;
   final SterilizationStatus sterilization;
+  final bool sentForSterilization;
   final bool rabies;
   final bool nineInOne;
   final DateTime? vaccinationDate;
